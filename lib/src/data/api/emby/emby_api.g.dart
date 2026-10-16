@@ -625,7 +625,6 @@ class _EmbyApi implements EmbyApi {
   Future<HttpResponse<ItemsWrapper>> getPlaylists({
     required String userId,
     String type = 'Playlist',
-    String mediaTypes = 'Audio',
     List<String> fields = const ['Path', 'ChildCount'],
     String startIndex = '0',
     String limit = '100',
@@ -640,7 +639,6 @@ class _EmbyApi implements EmbyApi {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{
       r'IncludeItemTypes': type,
-      r'MediaTypes': mediaTypes,
       r'Fields': fields,
       r'StartIndex': startIndex,
       r'Limit': limit,
@@ -683,7 +681,6 @@ class _EmbyApi implements EmbyApi {
     required String libraryId,
     required String searchTerm,
     String type = 'Playlist',
-    String mediaTypes = 'Audio',
     String startIndex = '0',
     String limit = '100',
     String sortOrder = 'Descending',
@@ -694,7 +691,6 @@ class _EmbyApi implements EmbyApi {
       r'ParentId': libraryId,
       r'SearchTerm': searchTerm,
       r'IncludeItemTypes': type,
-      r'MediaTypes': mediaTypes,
       r'StartIndex': startIndex,
       r'Limit': limit,
       r'SortOrder': sortOrder,

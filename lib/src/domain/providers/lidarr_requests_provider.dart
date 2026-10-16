@@ -148,7 +148,7 @@ class LidarrRequest {
   }
 
   String get statusLabel => switch (stage) {
-    LidarrStage.searching => 'Searching on Lidarr…',
+    LidarrStage.searching => message ?? 'Searching on Lidarr…',
     LidarrStage.downloading =>
       progress == null
           ? 'Downloading to server…'
@@ -233,6 +233,8 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
   final _lastQueued = <String, DateTime>{};
   final _lastSearch = <String, DateTime>{};
   final _releaseChecked = <String>{};
+  final _lastDiagnosis = <String, DateTime>{};
+  static const _diagnoseAfter = Duration(minutes: 3);
   static const _researchAfter = Duration(minutes: 15);
   final _deviceDownloads = <String>{};
   var _serverScanCounter = 0;
@@ -442,6 +444,7 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
       );
       await _checkRelease(lidarr, request, album, tracks);
       await _nudge(lidarr, request, album);
+      await _diagnose(lidarr, request, album);
       if (request.stage != LidarrStage.searching) {
         _update(request.copyWith(stage: LidarrStage.searching));
       }
@@ -505,6 +508,54 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
     debugPrint(
       '[Lidarr] ${request.albumTitle}: no release lists every requested song',
     );
+  }
+
+  /// When a search has had a few minutes and nothing is downloading, asks
+  /// Lidarr what its indexers found, so the request can say why.
+  Future<void> _diagnose(
+    LidarrClient lidarr,
+    LidarrRequest request,
+    LidarrAlbum album,
+  ) async {
+    final age = DateTime.now().difference(request.createdAt);
+    if (age < _diagnoseAfter || _lastQueued.containsKey(request.id)) return;
+    final last = _lastDiagnosis[request.id];
+    if (last != null && DateTime.now().difference(last) < _researchAfter) {
+      return;
+    }
+    _lastDiagnosis[request.id] = DateTime.now();
+    final candidates = await lidarr.releaseCandidates(album.id);
+    final usable = candidates.where((c) => !c.rejected).length;
+    final reasons = <String, int>{};
+    for (final candidate in candidates.where((c) => c.rejected)) {
+      for (final reason in candidate.rejections) {
+        reasons[reason] = (reasons[reason] ?? 0) + 1;
+      }
+    }
+    final topReason =
+        (reasons.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
+            .firstOrNull
+            ?.key;
+    debugPrint(
+      '[Lidarr] ${request.albumTitle}: indexers returned '
+      '${candidates.length} releases, $usable usable. Rejections: $reasons',
+    );
+    for (final candidate in candidates.take(10)) {
+      debugPrint(
+        '[Lidarr]   ${candidate.rejected ? 'rejected' : 'ok'} '
+        '${candidate.title} ${candidate.rejections}',
+      );
+    }
+    final message = candidates.isEmpty
+        ? 'Lidarr\'s indexers found no releases for this album'
+        : usable > 0
+        ? 'Lidarr found $usable usable releases. It should grab one soon'
+        : 'Lidarr found ${candidates.length} releases but rejected them all'
+              '${topReason == null ? '' : ': $topReason'}';
+    final current = state.where((r) => r.id == request.id).firstOrNull;
+    if (current != null && current.isActive) {
+      _update(current.copyWith(message: () => message));
+    }
   }
 
   /// Keeps a stalled request alive: Lidarr can unmonitor an album while it

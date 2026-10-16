@@ -59,3 +59,30 @@ void logMediaBrowserItems(String label, HttpResponse<ItemsWrapper> response) {
     );
   }
 }
+
+/// Keeps only real, non-video playlists. Emby can return other items
+/// (songs, movies) from a playlist query, so the list is checked here
+/// rather than trusting the server's type filter.
+LibraryPage onlyMusicPlaylists(
+  LibraryPage page,
+  HttpResponse<ItemsWrapper> response,
+) {
+  final data = response.response.data;
+  final items = data is Map ? data['Items'] : null;
+  if (items is! List) return page;
+  final keep = <String>{
+    for (final item in items.whereType<Map<dynamic, dynamic>>())
+      if (item['Type'] == 'Playlist' && item['MediaType'] != 'Video')
+        '${item['Id']}',
+  };
+  final dropped = page.items.length - keep.length;
+  if (dropped > 0) {
+    debugPrint('[Library] hid $dropped items that are not music playlists');
+  }
+  return page.copyWith(
+    items: [
+      for (final item in page.items)
+        if (keep.contains(item.id)) item,
+    ],
+  );
+}

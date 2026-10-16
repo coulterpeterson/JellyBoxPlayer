@@ -152,7 +152,7 @@ class JellyfinClient implements MediaServerClient {
   Future<LibraryPage> getPlaylists(LibraryQuery query) async {
     final response = await _playlistsResponse(query);
     logMediaBrowserItems('playlists', response);
-    return response.data.toJellyfinLibraryPage();
+    return onlyMusicPlaylists(response.data.toJellyfinLibraryPage(), response);
   }
 
   Future<HttpResponse<ItemsWrapper>> _playlistsResponse(
@@ -430,7 +430,7 @@ class JellyfinClient implements MediaServerClient {
       limit: '${query.limit}',
       sortOrder: mediaBrowserSortOrder(query.direction),
     );
-    return response.data.toJellyfinLibraryPage();
+    return onlyMusicPlaylists(response.data.toJellyfinLibraryPage(), response);
   }
 
   @override

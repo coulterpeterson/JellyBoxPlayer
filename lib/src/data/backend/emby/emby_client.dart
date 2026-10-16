@@ -138,7 +138,7 @@ class EmbyClient implements MediaServerClient {
   Future<LibraryPage> getPlaylists(LibraryQuery query) async {
     final response = await _playlistsResponse(query);
     logMediaBrowserItems('playlists', response);
-    return response.data.toEmbyLibraryPage();
+    return onlyMusicPlaylists(response.data.toEmbyLibraryPage(), response);
   }
 
   Future<HttpResponse<ItemsWrapper>> _playlistsResponse(
@@ -420,7 +420,7 @@ class EmbyClient implements MediaServerClient {
       limit: '${query.limit}',
       sortOrder: mediaBrowserSortOrder(query.direction),
     );
-    return response.data.toEmbyLibraryPage();
+    return onlyMusicPlaylists(response.data.toEmbyLibraryPage(), response);
   }
 
   @override

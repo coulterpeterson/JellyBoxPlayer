@@ -212,6 +212,31 @@ class LidarrClient {
     return [for (final json in _list(data)) LidarrTrack.fromJson(json)];
   }
 
+  /// Asks Lidarr's indexers what they have for an album, like Lidarr's
+  /// interactive search, including why each result would be rejected.
+  /// This can take a while; indexers are queried live.
+  Future<List<({String title, bool rejected, List<String> rejections})>>
+  releaseCandidates(int albumId) async {
+    final data = await _send(
+      'GET release albumId=$albumId',
+      () => _dio.getUri<Object?>(
+        _uri('release', {'albumId': albumId}),
+        options: _options.copyWith(receiveTimeout: const Duration(minutes: 2)),
+      ),
+    );
+    return [
+      for (final json in _list(data))
+        (
+          title: json['title'] as String? ?? '',
+          rejected: json['rejected'] as bool? ?? false,
+          rejections: [
+            for (final reason in json['rejections'] as List? ?? const [])
+              '$reason',
+          ],
+        ),
+    ];
+  }
+
   Future<List<LidarrQueueItem>> queue() async {
     final data = await _get('queue', {
       'pageSize': 200,
