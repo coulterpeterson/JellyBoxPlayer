@@ -560,14 +560,22 @@ Future<void> showContextMenuSheet(
   await showModalBottomSheet<void>(
     context: context,
     useRootNavigator: true,
+    // Long menus scroll instead of running off the bottom of the screen.
+    isScrollControlled: true,
+    constraints: BoxConstraints(
+      maxHeight:
+          MediaQuery.sizeOf(context).height -
+          MediaQuery.paddingOf(context).top -
+          24,
+    ),
     backgroundColor: Colors.grey[900],
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
     ),
     builder: (sheetContext) => SafeArea(
       top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: ListView(
+        shrinkWrap: true,
         children: [
           for (final action in actions)
             action.toListTile(

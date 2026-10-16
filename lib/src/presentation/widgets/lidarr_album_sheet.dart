@@ -61,32 +61,58 @@ Future<void> requestFromLidarr(
   }
 }
 
-Future<void> showLidarrAlbumSheet(BuildContext context, LidarrAlbum album) =>
-    showModalBottomSheet<void>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      backgroundColor: Colors.grey[900],
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.75,
-        maxChildSize: 0.95,
-        builder: (context, controller) =>
-            LidarrAlbumSheet(album: album, scrollController: controller),
-      ),
-    );
+Future<void> showLidarrAlbumSheet(
+  BuildContext context,
+  LidarrAlbum album, {
+  SongPick? pick,
+}) => showModalBottomSheet<void>(
+  context: context,
+  useRootNavigator: true,
+  isScrollControlled: true,
+  backgroundColor: Colors.grey[900],
+  shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+  ),
+  builder: (context) => DraggableScrollableSheet(
+    expand: false,
+    initialChildSize: 0.75,
+    maxChildSize: 0.95,
+    builder: (context, controller) => LidarrAlbumSheet(
+      album: album,
+      pick: pick,
+      scrollController: controller,
+    ),
+  ),
+);
+
+/// The song the user searched for, to tick in the album's track list, and
+/// the other albums it's on.
+class SongPick {
+  const SongPick({
+    required this.title,
+    required this.recordingIds,
+    this.alternatives = const [],
+  });
+
+  final String title;
+  final Set<String> recordingIds;
+  final List<CatalogAlbum> alternatives;
+
+  bool matches(LidarrTrack track) =>
+      (track.recordingId != null && recordingIds.contains(track.recordingId)) ||
+      normalizeTitle(track.title) == normalizeTitle(title);
+}
 
 class LidarrAlbumSheet extends ConsumerStatefulWidget {
   const LidarrAlbumSheet({
     required this.album,
+    this.pick,
     this.scrollController,
     super.key,
   });
 
   final LidarrAlbum album;
+  final SongPick? pick;
   final ScrollController? scrollController;
 
   @override
@@ -96,6 +122,7 @@ class LidarrAlbumSheet extends ConsumerStatefulWidget {
 class _LidarrAlbumSheetState extends ConsumerState<LidarrAlbumSheet> {
   final _selected = <int>{};
   var _busy = false;
+  var _picked = false;
 
   LidarrAlbum get album => widget.album;
 
@@ -116,6 +143,13 @@ class _LidarrAlbumSheetState extends ConsumerState<LidarrAlbumSheet> {
     final muted = theme.colorScheme.onPrimary.withValues(alpha: 0.6);
     final tracks = ref.watch(lidarrAlbumTracksProvider(album));
     final trackList = tracks.valueOrNull ?? const <LidarrTrack>[];
+    final pick = widget.pick;
+    if (!_picked && pick != null && trackList.isNotEmpty) {
+      _picked = true;
+      for (final (index, track) in trackList.indexed) {
+        if (pick.matches(track)) _selected.add(index);
+      }
+    }
     final year = album.releaseDate?.year;
     final inLibrary =
         album.isInLidarr &&
@@ -193,6 +227,23 @@ class _LidarrAlbumSheetState extends ConsumerState<LidarrAlbumSheet> {
               ),
             ),
           ),
+          if (pick != null && pick.alternatives.length > 1)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => _chooseVersion(pick),
+                    icon: const Icon(Icons.swap_horiz, size: 20),
+                    label: Text(
+                      '"${pick.title}" is on ${pick.alternatives.length} '
+                      'releases. Choose another',
+                    ),
+                  ),
+                ),
+              ),
+            ),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -264,6 +315,43 @@ class _LidarrAlbumSheetState extends ConsumerState<LidarrAlbumSheet> {
     );
   }
 
+  Future<void> _chooseVersion(SongPick pick) async {
+    final chosen = await showModalBottomSheet<CatalogAlbum>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: Colors.grey[900],
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.6,
+        builder: (context, controller) => ListView(
+          controller: controller,
+          children: [
+            for (final album in pick.alternatives)
+              ListTile(
+                leading: LidarrCoverImage(url: album.coverUrl, size: 44),
+                title: Text(album.title),
+                subtitle: Text(
+                  [
+                    album.artistName,
+                    if (album.typeLabel.isNotEmpty) album.typeLabel,
+                    if (album.year != null) '${album.year}',
+                  ].join(' • '),
+                ),
+                selected: album.releaseGroupId == widget.album.foreignAlbumId,
+                onTap: () => Navigator.of(context).pop(album),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    final navigator = Navigator.of(context);
+    final opened = openCatalogAlbum(context, ref, chosen, pick: pick);
+    navigator.pop();
+    await opened;
+  }
+
   Widget _action({
     required IconData icon,
     required String label,
@@ -292,8 +380,25 @@ class LidarrCover extends StatelessWidget {
   final double size;
 
   @override
+  Widget build(BuildContext context) =>
+      LidarrCoverImage(url: album.coverUrl, size: size);
+}
+
+class LidarrCoverImage extends StatelessWidget {
+  const LidarrCoverImage({
+    required this.url,
+    required this.size,
+    this.circle = false,
+    super.key,
+  });
+
+  final String? url;
+  final double size;
+  final bool circle;
+
+  @override
   Widget build(BuildContext context) {
-    final url = album.coverUrl;
+    final url = this.url;
     final fallback = Image.asset(
       Images.album,
       width: size,
@@ -301,7 +406,7 @@ class LidarrCover extends StatelessWidget {
       fit: BoxFit.cover,
     );
     return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: BorderRadius.circular(circle ? size / 2 : 6),
       child: url == null
           ? fallback
           : Image.network(
@@ -312,5 +417,97 @@ class LidarrCover extends StatelessWidget {
               errorBuilder: (_, _, _) => fallback,
             ),
     );
+  }
+}
+
+/// Opens a search result's album, looking it up in Lidarr first if it
+/// came from MusicBrainz.
+Future<void> openCatalogAlbum(
+  BuildContext context,
+  WidgetRef ref,
+  CatalogAlbum album, {
+  SongPick? pick,
+}) async {
+  final client = ref.read(lidarrClientProvider);
+  if (client == null) return;
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final LidarrAlbum? resolved;
+  try {
+    resolved = await _withProgress(
+      context,
+      resolveCatalogAlbum(client, album),
+    );
+  } on Object catch (error) {
+    messenger?.showSnackBar(
+      SnackBar(content: Text("Couldn't look up ${album.title}: $error")),
+    );
+    return;
+  }
+  if (resolved == null) {
+    messenger?.showSnackBar(
+      SnackBar(content: Text("Lidarr doesn't know \"${album.title}\" yet")),
+    );
+    return;
+  }
+  if (!context.mounted) return;
+  await showLidarrAlbumSheet(context, resolved, pick: pick);
+}
+
+/// Finds the best album containing [song] and opens it with the song
+/// ticked.
+Future<void> openCatalogSong(
+  BuildContext context,
+  WidgetRef ref,
+  CatalogSong song,
+) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final SongSource source;
+  try {
+    source = await _withProgress(
+      context,
+      ref.read(songSourceProvider(song).future),
+    );
+  } on Object catch (error) {
+    messenger?.showSnackBar(
+      SnackBar(content: Text("Couldn't find albums for ${song.title}: $error")),
+    );
+    return;
+  }
+  if (source.albums.isEmpty) {
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text('No album with "${song.title}" found on MusicBrainz'),
+      ),
+    );
+    return;
+  }
+  if (!context.mounted) return;
+  await openCatalogAlbum(
+    context,
+    ref,
+    source.albums.first,
+    pick: SongPick(
+      title: song.title,
+      recordingIds: source.recordingIds,
+      alternatives: source.albums,
+    ),
+  );
+}
+
+Future<T> _withProgress<T>(BuildContext context, Future<T> future) async {
+  final navigator = Navigator.of(context, rootNavigator: true);
+  var shown = true;
+  unawaited(
+    showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    ).whenComplete(() => shown = false),
+  );
+  try {
+    return await future;
+  } finally {
+    if (shown) navigator.pop();
   }
 }

@@ -138,6 +138,55 @@ class LidarrClient {
     return [for (final json in _list(data)) LidarrAlbum(json)];
   }
 
+  /// Lidarr's own search (what its Add New page uses): artists and albums.
+  Future<({List<LidarrArtist> artists, List<LidarrAlbum> albums})> search(
+    String term,
+  ) async {
+    final results = _list(await _get('search', {'term': term}));
+    final artists = <LidarrArtist>[];
+    final albums = <LidarrAlbum>[];
+    for (final result in results) {
+      if (result['artist'] case final Map<dynamic, dynamic> artist) {
+        artists.add(LidarrArtist(artist.cast<String, dynamic>()));
+      } else if (result['album'] case final Map<dynamic, dynamic> album) {
+        albums.add(LidarrAlbum(album.cast<String, dynamic>()));
+      }
+    }
+    return (artists: artists, albums: albums);
+  }
+
+  /// Finds an album by its MusicBrainz release group id. Returns Lidarr's
+  /// stored album when it already tracks it.
+  Future<LidarrAlbum?> lookupAlbum(String releaseGroupId) async {
+    final albums = await searchAlbums('lidarr:$releaseGroupId');
+    return albums.firstOrNull;
+  }
+
+  Future<List<LidarrAlbum>> artistAlbums(int artistId) async {
+    final data = await _get('album', {'artistId': artistId});
+    return [for (final json in _list(data)) LidarrAlbum(json)];
+  }
+
+  /// Makes [releaseId] the album's monitored release, so Lidarr grabs that
+  /// edition. Returns false when the album has no such release.
+  Future<bool> monitorRelease(int albumId, int releaseId) async {
+    final data = await _get('album/$albumId');
+    final json = (data! as Map).cast<String, dynamic>();
+    final releases = [
+      for (final release in json['releases'] as List? ?? const [])
+        if (release is Map) release.cast<String, dynamic>(),
+    ];
+    if (!releases.any((r) => r['id'] == releaseId)) return false;
+    await _put('album/$albumId', {
+      ...json,
+      'releases': [
+        for (final release in releases)
+          {...release, 'monitored': release['id'] == releaseId},
+      ],
+    });
+    return true;
+  }
+
   Future<LidarrAlbum> album(int id) async {
     final data = await _get('album/$id');
     return LidarrAlbum((data! as Map).cast<String, dynamic>());
@@ -156,6 +205,11 @@ class LidarrClient {
         final disc = a.discNumber.compareTo(b.discNumber);
         return disc != 0 ? disc : a.number.compareTo(b.number);
       });
+  }
+
+  Future<List<LidarrTrack>> releaseTracks(int releaseId) async {
+    final data = await _get('track', {'albumReleaseId': releaseId});
+    return [for (final json in _list(data)) LidarrTrack.fromJson(json)];
   }
 
   Future<List<LidarrQueueItem>> queue() async {

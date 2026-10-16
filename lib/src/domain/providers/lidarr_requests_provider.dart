@@ -232,6 +232,7 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
   var _ticking = false;
   final _lastQueued = <String, DateTime>{};
   final _lastSearch = <String, DateTime>{};
+  final _releaseChecked = <String>{};
   static const _researchAfter = Duration(minutes: 15);
   final _deviceDownloads = <String>{};
   var _serverScanCounter = 0;
@@ -439,6 +440,7 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
         '[Lidarr] ${request.albumTitle}: waiting, monitored=${album.monitored} '
         'files=${album.trackFileCount}/${album.trackCount}',
       );
+      await _checkRelease(lidarr, request, album, tracks);
       await _nudge(lidarr, request, album);
       if (request.stage != LidarrStage.searching) {
         _update(request.copyWith(stage: LidarrStage.searching));
@@ -471,6 +473,38 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
         next.copyWith(stage: LidarrStage.waitingForServer, progress: () => 1),
       );
     }
+  }
+
+  /// Lidarr grabs one edition of an album. Make sure it's one that has the
+  /// requested songs (a bonus track may only be on the deluxe edition).
+  Future<void> _checkRelease(
+    LidarrClient lidarr,
+    LidarrRequest request,
+    LidarrAlbum album,
+    List<LidarrTrack> monitoredTracks,
+  ) async {
+    final wanted = request.wanted;
+    if (wanted == null || wanted.isEmpty) return;
+    if (!_releaseChecked.add(request.id)) return;
+    bool hasAll(List<LidarrTrack> tracks) =>
+        wanted.every((w) => tracks.any(w.matchesTrack));
+    if (hasAll(monitoredTracks)) return;
+    for (final release in album.releases.take(12)) {
+      if (release.monitored) continue;
+      final tracks = await lidarr.releaseTracks(release.id);
+      if (!hasAll(tracks)) continue;
+      debugPrint(
+        '[Lidarr] ${request.albumTitle}: switching to release ${release.id}, '
+        'which has the requested songs',
+      );
+      if (await lidarr.monitorRelease(album.id, release.id)) {
+        await lidarr.searchAlbum(album.id);
+      }
+      return;
+    }
+    debugPrint(
+      '[Lidarr] ${request.albumTitle}: no release lists every requested song',
+    );
   }
 
   /// Keeps a stalled request alive: Lidarr can unmonitor an album while it
