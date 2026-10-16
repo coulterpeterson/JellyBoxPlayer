@@ -129,6 +129,8 @@ class LidarrQueueItem {
 
   double? get progress => size > 0 ? (1 - sizeLeft / size).clamp(0, 1) : null;
 
+  int get id => (json['id'] as num?)?.toInt() ?? 0;
+
   String? get downloadId => json['downloadId'] as String?;
 
   String? get outputPath => json['outputPath'] as String?;

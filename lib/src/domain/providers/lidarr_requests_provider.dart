@@ -286,6 +286,8 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
   final _releaseChecked = <String>{};
   final _lastDiagnosis = <String, DateTime>{};
   final _importAttempted = <String>{};
+  final _blocklisted = <String, int>{};
+  static const _maxBlocklists = 3;
   static const _diagnoseAfter = Duration(minutes: 3);
   static const _researchAfter = Duration(minutes: 15);
   final _deviceDownloads = <String>{};
@@ -823,11 +825,44 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
       _note(request, 'Importing ${importable.length} songs');
       return;
     }
-    _note(
-      request,
-      "Lidarr downloaded it but can't import it: "
-      '${reasons.isNotEmpty ? reasons.first : item.statusMessages.firstOrNull ?? 'no matching files'}',
-    );
+    final reason = reasons.isNotEmpty
+        ? reasons.first
+        : item.statusMessages.firstOrNull ?? 'no matching files';
+    if (files.isEmpty) {
+      final folder = item.outputPath;
+      if (folder != null) {
+        try {
+          final entries = await lidarr.listFolder(folder);
+          debugPrint(
+            '[Lidarr] ${request.albumTitle}: download folder holds '
+            '${entries.length} entries',
+          );
+          for (final entry in entries.take(40)) {
+            debugPrint('[Lidarr]   ${entry.name} (${entry.size} bytes)');
+          }
+        } on Object catch (error) {
+          debugPrint('[Lidarr] could not list $folder: $error');
+        }
+      }
+    }
+    // Nothing in this download can be imported: blocklist it so Lidarr
+    // grabs a different release.
+    final retries = _blocklisted[request.id] ?? 0;
+    if (retries < _maxBlocklists && item.id > 0) {
+      _blocklisted[request.id] = retries + 1;
+      debugPrint(
+        '[Lidarr] ${request.albumTitle}: blocklisting ${item.title} ($reason) '
+        'and searching again',
+      );
+      await lidarr.blocklistQueueItem(item.id);
+      await lidarr.searchAlbum(request.lidarrAlbumId);
+      // Let the "why isn't anything downloading" check run again.
+      _lastQueued.remove(request.id);
+      _lastDiagnosis.remove(request.id);
+      _note(request, "That download couldn't be imported, trying another");
+      return;
+    }
+    _note(request, "Lidarr downloaded it but can't import it: $reason");
   }
 
   /// Keeps a stalled request alive: Lidarr can unmonitor an album while it

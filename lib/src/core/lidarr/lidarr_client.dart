@@ -252,6 +252,41 @@ class LidarrClient {
     return _list(data);
   }
 
+  /// Lists a folder as Lidarr sees it, files included.
+  Future<List<({String name, int size})>> listFolder(String path) async {
+    final data = await _get('filesystem', {
+      'path': path,
+      'includeFiles': true,
+      'allowFoldersWithoutTrailingSlashes': true,
+    });
+    final map = data is Map ? data : const {};
+    return [
+      for (final entry in [
+        ...(map['directories'] as List? ?? const []),
+        ...(map['files'] as List? ?? const []),
+      ])
+        if (entry is Map)
+          (
+            name: '${entry['name']}${entry['type'] == 'folder' ? '/' : ''}',
+            size: (entry['size'] as num?)?.toInt() ?? 0,
+          ),
+    ];
+  }
+
+  /// Drops a download from the queue and the download client, and
+  /// blocklists the release so Lidarr picks a different one next time.
+  Future<void> blocklistQueueItem(int queueId) => _send(
+    'DELETE queue/$queueId (blocklist)',
+    () => _dio.deleteUri<Object?>(
+      _uri('queue/$queueId', {
+        'removeFromClient': true,
+        'blocklist': true,
+        'skipRedownload': false,
+      }),
+      options: _options,
+    ),
+  );
+
   /// Imports files the way Lidarr's interactive import does.
   Future<void> manualImport(List<Map<String, dynamic>> files) =>
       _post('command', {
