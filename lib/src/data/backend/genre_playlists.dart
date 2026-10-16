@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'dart:math';
 
 import 'package:optional_features/genre_playlists.dart';
@@ -113,6 +114,10 @@ Future<List<GeneratedPlaylist>> generateGenrePlaylists(
     libraryId: libraryId,
     random: random,
   ).generate(includeDiscovery: includeDiscovery);
+  debugPrint(
+    '[Library] app-generated playlists: '
+    '${[for (final spec in specs) spec.name].join(', ')}',
+  );
   return [
     for (final spec in specs)
       GeneratedPlaylist(

@@ -172,6 +172,7 @@ abstract class EmbyApi {
     @Path('userId') required String userId,
     @Query('IncludeItemTypes') String type = 'Playlist',
     @Query('MediaTypes') String mediaTypes = 'Audio',
+    @Query('Fields') List<String> fields = const ['Path', 'ChildCount'],
     @Query('StartIndex') String startIndex = '0',
     @Query('Limit') String limit = '100',
     @Query('SortBy') String sortBy = 'DateCreated,SortName',

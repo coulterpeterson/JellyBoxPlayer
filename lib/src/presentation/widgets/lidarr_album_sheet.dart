@@ -30,6 +30,9 @@ Future<void> requestFromLidarr(
     playlist = await showPlaylistPicker(context, isDesktop: isDesktop);
     if (playlist == null) return;
   }
+  messenger?.showSnackBar(
+    SnackBar(content: Text('Sending "${album.title}" to Lidarr…')),
+  );
   try {
     final request = await ref
         .read(lidarrRequestsProvider.notifier)

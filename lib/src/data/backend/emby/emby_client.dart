@@ -56,6 +56,9 @@ class EmbyClient implements MediaServerClient {
   @override
   Future<LibraryPage> getAlbums(LibraryQuery query) async {
     final response = await _albumsResponse(query);
+    if (query.filters.contains(ItemFilterFlag.favorite)) {
+      logMediaBrowserItems('favourite albums', response);
+    }
     return response.data.toEmbyLibraryPage();
   }
 
@@ -80,6 +83,9 @@ class EmbyClient implements MediaServerClient {
   @override
   Future<LibraryPage> getArtists(LibraryQuery query) async {
     final response = await _artistsResponse(query);
+    if (query.filters.contains(ItemFilterFlag.favorite)) {
+      logMediaBrowserItems('favourite artists', response);
+    }
     return response.data.toEmbyLibraryPage();
   }
 
@@ -131,6 +137,7 @@ class EmbyClient implements MediaServerClient {
   @override
   Future<LibraryPage> getPlaylists(LibraryQuery query) async {
     final response = await _playlistsResponse(query);
+    logMediaBrowserItems('playlists', response);
     return response.data.toEmbyLibraryPage();
   }
 

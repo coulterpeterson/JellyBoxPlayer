@@ -231,6 +231,8 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
   Timer? _timer;
   var _ticking = false;
   final _lastQueued = <String, DateTime>{};
+  final _lastSearch = <String, DateTime>{};
+  static const _researchAfter = Duration(minutes: 15);
   final _deviceDownloads = <String>{};
   var _serverScanCounter = 0;
 
@@ -290,6 +292,13 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
 
   void _update(LidarrRequest request) {
     if (!mounted) return;
+    final previous = state.where((r) => r.id == request.id).firstOrNull;
+    if (previous?.stage != request.stage) {
+      debugPrint(
+        '[Lidarr] ${request.albumTitle}: ${previous?.stage.name} -> '
+        '${request.stage.name}${request.message == null ? '' : ' (${request.message})'}',
+      );
+    }
     state = [
       for (final existing in state)
         if (existing.id == request.id) request else existing,
@@ -397,7 +406,21 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
       return;
     }
 
-    final album = await lidarr.album(request.lidarrAlbumId);
+    final LidarrAlbum album;
+    try {
+      album = await lidarr.album(request.lidarrAlbumId);
+    } on LidarrException catch (error) {
+      if (!error.isNotFound) rethrow;
+      _update(
+        request.copyWith(
+          stage: LidarrStage.failed,
+          message: () =>
+              'Lidarr removed this album. Its metadata profile may leave out '
+              'EPs, singles or soundtracks.',
+        ),
+      );
+      return;
+    }
     final tracks = await lidarr.tracks(request.lidarrAlbumId);
     final wanted = request.wanted;
     final bool ready;
@@ -412,11 +435,17 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
       ready = _albumSettled(request, album);
     }
     if (!ready) {
+      debugPrint(
+        '[Lidarr] ${request.albumTitle}: waiting, monitored=${album.monitored} '
+        'files=${album.trackFileCount}/${album.trackCount}',
+      );
+      await _nudge(lidarr, request, album);
       if (request.stage != LidarrStage.searching) {
         _update(request.copyWith(stage: LidarrStage.searching));
       }
       return;
     }
+    debugPrint('[Lidarr] ${request.albumTitle}: imported, moving on');
 
     var next = request;
     if (wanted != null && wanted.isNotEmpty && !request.trimmed) {
@@ -442,6 +471,27 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
         next.copyWith(stage: LidarrStage.waitingForServer, progress: () => 1),
       );
     }
+  }
+
+  /// Keeps a stalled request alive: Lidarr can unmonitor an album while it
+  /// refreshes a newly added artist, and a search can come up empty until
+  /// a release appears on an indexer.
+  Future<void> _nudge(
+    LidarrClient lidarr,
+    LidarrRequest request,
+    LidarrAlbum album,
+  ) async {
+    final last = _lastSearch[request.id];
+    final unmonitored = !album.monitored && !request.trimmed;
+    final stale =
+        last == null || DateTime.now().difference(last) > _researchAfter;
+    if (!unmonitored && !stale) return;
+    _lastSearch[request.id] = DateTime.now();
+    if (unmonitored) {
+      debugPrint('[Lidarr] ${request.albumTitle}: was unmonitored, fixing');
+      await lidarr.setMonitored([album.id], monitored: true);
+    }
+    await lidarr.searchAlbum(album.id);
   }
 
   bool _albumSettled(LidarrRequest request, LidarrAlbum album) {

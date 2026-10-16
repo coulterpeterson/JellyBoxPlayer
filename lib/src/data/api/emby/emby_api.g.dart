@@ -626,6 +626,7 @@ class _EmbyApi implements EmbyApi {
     required String userId,
     String type = 'Playlist',
     String mediaTypes = 'Audio',
+    List<String> fields = const ['Path', 'ChildCount'],
     String startIndex = '0',
     String limit = '100',
     String sortBy = 'DateCreated,SortName',
@@ -640,6 +641,7 @@ class _EmbyApi implements EmbyApi {
     final queryParameters = <String, dynamic>{
       r'IncludeItemTypes': type,
       r'MediaTypes': mediaTypes,
+      r'Fields': fields,
       r'StartIndex': startIndex,
       r'Limit': limit,
       r'SortBy': sortBy,

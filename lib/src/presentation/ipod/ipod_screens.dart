@@ -51,7 +51,7 @@ List<IpodMenuItem> _mainMenuItems(BuildContext context, WidgetRef ref) {
     IpodMenuItem(
       'Shuffle Songs',
       chevron: false,
-      onSelect: (context) => unawaited(_shuffleSongs(context, ref)),
+      onSelect: (context) => unawaited(_shuffleSongs(context, nav.ref)),
     ),
     IpodMenuItem(
       'Games',
@@ -79,8 +79,10 @@ List<IpodMenuItem> _mainMenuItems(BuildContext context, WidgetRef ref) {
 String? _libraryId(WidgetRef ref) =>
     ref.read(currentLibraryProvider).valueOrNull?.id;
 
-List<IpodMenuItem> _musicMenuItems(BuildContext context, WidgetRef ref) {
+List<IpodMenuItem> _musicMenuItems(BuildContext context, WidgetRef menuRef) {
   final nav = IpodNavigator.of(context);
+  // Actions run after this menu has slid away, so they use the shell's ref.
+  final ref = nav.ref;
   final client = ref.read(mediaServerClientProvider);
   IpodMenuItem list(String label, IpodLoader load, IpodItemSelected select) =>
       IpodMenuItem(

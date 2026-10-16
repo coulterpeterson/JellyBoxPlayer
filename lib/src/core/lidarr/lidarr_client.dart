@@ -1,10 +1,18 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:jplayer/src/core/lidarr/lidarr_models.dart';
 
 class LidarrException implements Exception {
-  const LidarrException(this.message, {this.isUnauthorized = false});
+  const LidarrException(
+    this.message, {
+    this.isUnauthorized = false,
+    this.statusCode,
+  });
 
   final String message;
+  final int? statusCode;
+
+  bool get isNotFound => statusCode == 404;
   final bool isUnauthorized;
 
   @override
@@ -55,12 +63,20 @@ class LidarrClient {
     responseType: ResponseType.json,
   );
 
-  Future<T> _send<T>(Future<Response<T>> Function() request) async {
+  Future<T> _send<T>(
+    String label,
+    Future<Response<T>> Function() request,
+  ) async {
     try {
       final response = await request();
+      debugPrint('[Lidarr] $label -> ${response.statusCode}');
       return response.data as T;
     } on DioException catch (error) {
       final status = error.response?.statusCode;
+      debugPrint(
+        '[Lidarr] $label -> ${status ?? error.type.name} '
+        '${_summarize(error.response?.data)}',
+      );
       if (status == 401 || status == 403) {
         throw const LidarrException(
           'Lidarr rejected the API key',
@@ -73,24 +89,35 @@ class LidarrClient {
         [{'errorMessage': final String message}, ...] => message,
         _ => error.message ?? 'HTTP $status',
       };
-      throw LidarrException(detail);
+      throw LidarrException(detail, statusCode: status);
     }
   }
 
   Future<Object?> _get(String path, [Map<String, Object?> query = const {}]) =>
-      _send(() => _dio.getUri<Object?>(_uri(path, query), options: _options));
+      _send(
+        'GET $path ${query.isEmpty ? '' : query}',
+        () => _dio.getUri<Object?>(_uri(path, query), options: _options),
+      );
 
   Future<Object?> _post(String path, Object? body) => _send(
+    'POST $path',
     () => _dio.postUri<Object?>(_uri(path), data: body, options: _options),
   );
 
   Future<Object?> _put(String path, Object? body) => _send(
+    'PUT $path',
     () => _dio.putUri<Object?>(_uri(path), data: body, options: _options),
   );
 
   Future<Object?> _delete(String path, [Object? body]) => _send(
+    'DELETE $path',
     () => _dio.deleteUri<Object?>(_uri(path), data: body, options: _options),
   );
+
+  static String _summarize(Object? data) {
+    final text = '$data';
+    return text.length > 300 ? '${text.substring(0, 300)}…' : text;
+  }
 
   static List<Map<String, dynamic>> _list(Object? data) => [
     for (final entry in data as List? ?? const [])
@@ -141,49 +168,57 @@ class LidarrClient {
     return [for (final json in _list(records)) LidarrQueueItem(json)];
   }
 
-  /// Adds [album] (and its artist, if Lidarr doesn't know it yet) as a
-  /// monitored album and starts a search for it. Returns the stored album.
+  /// Monitors [album] and starts a search for it, adding its artist to
+  /// Lidarr first if needed. Returns the stored album.
+  ///
+  /// A new artist is added with only this album monitored
+  /// (`albumsToMonitor`), so Lidarr's post-add scan doesn't unmonitor it
+  /// and nothing else from the artist gets downloaded.
   Future<LidarrAlbum> addAlbum(LidarrAlbum album) async {
+    debugPrint(
+      '[Lidarr] request "${album.title}" by ${album.artistName} '
+      '(album ${album.id}, ${album.foreignAlbumId})',
+    );
     if (album.isInLidarr) {
       await setMonitored([album.id], monitored: true);
       await searchAlbum(album.id);
       return this.album(album.id);
     }
 
-    final rootFolders = _list(await _get('rootfolder'));
-    if (rootFolders.isEmpty) {
-      throw const LidarrException('Lidarr has no root folder set up');
+    final artistId = (album.artist['id'] as num?)?.toInt() ?? 0;
+    final Map<String, dynamic> artist;
+    if (artistId > 0) {
+      artist = album.artist;
+    } else {
+      final rootFolders = _list(await _get('rootfolder'));
+      if (rootFolders.isEmpty) {
+        throw const LidarrException('Lidarr has no root folder set up');
+      }
+      final root = rootFolders.first;
+      artist = {
+        ...album.artist,
+        'qualityProfileId':
+            root['defaultQualityProfileId'] ??
+            _list(await _get('qualityprofile')).firstOrNull?['id'],
+        'metadataProfileId':
+            root['defaultMetadataProfileId'] ??
+            _list(await _get('metadataprofile')).firstOrNull?['id'],
+        'rootFolderPath': root['path'],
+        'monitored': true,
+        'monitorNewItems': 'none',
+        'addOptions': {
+          'monitor': 'none',
+          'albumsToMonitor': [album.foreignAlbumId],
+          'searchForMissingAlbums': true,
+        },
+      };
     }
-    final root = rootFolders.first;
-    final qualityProfileId =
-        root['defaultQualityProfileId'] ??
-        _list(await _get('qualityprofile')).firstOrNull?['id'];
-    final metadataProfileId =
-        root['defaultMetadataProfileId'] ??
-        _list(await _get('metadataprofile')).firstOrNull?['id'];
-
-    final artistId = album.artist['id'];
-    final existingArtist = artistId is num && artistId > 0;
-    final body = {
+    final data = await _post('album', {
       ...album.json,
       'monitored': true,
       'addOptions': {'searchForNewAlbum': true},
-      'artist': {
-        ...album.artist,
-        if (!existingArtist) ...{
-          'qualityProfileId': qualityProfileId,
-          'metadataProfileId': metadataProfileId,
-          'rootFolderPath': root['path'],
-          'monitored': true,
-          'monitorNewItems': 'none',
-          'addOptions': {
-            'monitor': 'none',
-            'searchForMissingAlbums': false,
-          },
-        },
-      },
-    };
-    final data = await _post('album', body);
+      'artist': artist,
+    });
     return LidarrAlbum((data! as Map).cast<String, dynamic>());
   }
 
