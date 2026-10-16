@@ -12,6 +12,11 @@ class LidarrAlbum {
 
   String get title => json['title'] as String? ?? '';
 
+  int get artistId =>
+      (json['artistId'] as num?)?.toInt() ??
+      (artist['id'] as num?)?.toInt() ??
+      0;
+
   String get foreignAlbumId => json['foreignAlbumId'] as String? ?? '';
 
   bool get monitored => json['monitored'] as bool? ?? false;

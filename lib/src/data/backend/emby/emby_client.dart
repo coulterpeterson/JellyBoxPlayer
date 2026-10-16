@@ -134,11 +134,29 @@ class EmbyClient implements MediaServerClient {
     nameLessThan: nameLessThan,
   );
 
+  late final MusicPlaylistCheck _musicPlaylists = MusicPlaylistCheck(
+    _playlistAudioCount,
+  );
+
+  Future<int> _playlistAudioCount(String playlistId) async {
+    final response = await _dio.getUri<Map<String, dynamic>>(
+      _resolve('Users/$userId/Items', {
+        'ParentId': playlistId,
+        'IncludeItemTypes': 'Audio',
+        'Recursive': 'true',
+        'Limit': '0',
+      }),
+    );
+    return (response.data?['TotalRecordCount'] as num?)?.toInt() ?? 0;
+  }
+
   @override
   Future<LibraryPage> getPlaylists(LibraryQuery query) async {
     final response = await _playlistsResponse(query);
     logMediaBrowserItems('playlists', response);
-    return onlyMusicPlaylists(response.data.toEmbyLibraryPage(), response);
+    return _musicPlaylists.filter(
+      onlyMusicPlaylists(response.data.toEmbyLibraryPage(), response),
+    );
   }
 
   Future<HttpResponse<ItemsWrapper>> _playlistsResponse(
@@ -250,7 +268,7 @@ class EmbyClient implements MediaServerClient {
       playlistId: playlistId,
       userId: userId,
     );
-    return response.data.toEmbyLibraryPage();
+    return onlyPlaylistSongs(response.data.toEmbyLibraryPage(), response);
   }
 
   @override
@@ -420,7 +438,9 @@ class EmbyClient implements MediaServerClient {
       limit: '${query.limit}',
       sortOrder: mediaBrowserSortOrder(query.direction),
     );
-    return onlyMusicPlaylists(response.data.toEmbyLibraryPage(), response);
+    return _musicPlaylists.filter(
+      onlyMusicPlaylists(response.data.toEmbyLibraryPage(), response),
+    );
   }
 
   @override

@@ -576,6 +576,7 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
       debugPrint('[Lidarr] ${request.albumTitle}: was unmonitored, fixing');
       await lidarr.setMonitored([album.id], monitored: true);
     }
+    await lidarr.ensureArtistMonitored(album.artistId);
     await lidarr.searchAlbum(album.id);
   }
 

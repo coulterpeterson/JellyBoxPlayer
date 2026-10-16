@@ -86,3 +86,58 @@ LibraryPage onlyMusicPlaylists(
     ],
   );
 }
+
+/// Remembers which playlists hold any music, so playlists made only of TV
+/// episodes or movies can be hidden without asking the server every time.
+class MusicPlaylistCheck {
+  MusicPlaylistCheck(this._audioCount);
+
+  final Future<int> Function(String playlistId) _audioCount;
+  final _hasMusic = <String, bool>{};
+
+  Future<LibraryPage> filter(LibraryPage page) async {
+    final unknown = [
+      for (final item in page.items)
+        if (!_hasMusic.containsKey(item.id)) item.id,
+    ];
+    await Future.wait([
+      for (final id in unknown)
+        _audioCount(id)
+            .then((count) => _hasMusic[id] = count > 0)
+            .catchError((Object _) => _hasMusic[id] = true),
+    ]);
+    final hidden = [
+      for (final item in page.items)
+        if (_hasMusic[item.id] == false) item.name,
+    ];
+    if (hidden.isNotEmpty) {
+      debugPrint('[Library] hid playlists with no music: ${hidden.join(', ')}');
+    }
+    return page.copyWith(
+      items: [
+        for (final item in page.items)
+          if (_hasMusic[item.id] ?? true) item,
+      ],
+    );
+  }
+}
+
+/// Keeps only songs from a playlist that also holds videos.
+LibraryPage onlyPlaylistSongs(
+  LibraryPage page,
+  HttpResponse<ItemsWrapper> response,
+) {
+  final data = response.response.data;
+  final items = data is Map ? data['Items'] : null;
+  if (items is! List) return page;
+  final songs = <String>{
+    for (final item in items.whereType<Map<dynamic, dynamic>>())
+      if (item['Type'] == 'Audio') '${item['Id']}',
+  };
+  return page.copyWith(
+    items: [
+      for (final item in page.items)
+        if (songs.contains(item.id)) item,
+    ],
+  );
+}

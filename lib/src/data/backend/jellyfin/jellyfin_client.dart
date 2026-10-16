@@ -148,11 +148,30 @@ class JellyfinClient implements MediaServerClient {
     nameLessThan: nameLessThan,
   );
 
+  late final MusicPlaylistCheck _musicPlaylists = MusicPlaylistCheck(
+    _playlistAudioCount,
+  );
+
+  Future<int> _playlistAudioCount(String playlistId) async {
+    final response = await _dio.getUri<Map<String, dynamic>>(
+      _resolve('Items', {
+        'userId': userId,
+        'ParentId': playlistId,
+        'IncludeItemTypes': 'Audio',
+        'Recursive': 'true',
+        'Limit': '0',
+      }),
+    );
+    return (response.data?['TotalRecordCount'] as num?)?.toInt() ?? 0;
+  }
+
   @override
   Future<LibraryPage> getPlaylists(LibraryQuery query) async {
     final response = await _playlistsResponse(query);
     logMediaBrowserItems('playlists', response);
-    return onlyMusicPlaylists(response.data.toJellyfinLibraryPage(), response);
+    return _musicPlaylists.filter(
+      onlyMusicPlaylists(response.data.toJellyfinLibraryPage(), response),
+    );
   }
 
   Future<HttpResponse<ItemsWrapper>> _playlistsResponse(
@@ -264,7 +283,7 @@ class JellyfinClient implements MediaServerClient {
       playlistId: playlistId,
       userId: userId,
     );
-    return response.data.toJellyfinLibraryPage();
+    return onlyPlaylistSongs(response.data.toJellyfinLibraryPage(), response);
   }
 
   @override
@@ -430,7 +449,9 @@ class JellyfinClient implements MediaServerClient {
       limit: '${query.limit}',
       sortOrder: mediaBrowserSortOrder(query.direction),
     );
-    return onlyMusicPlaylists(response.data.toJellyfinLibraryPage(), response);
+    return _musicPlaylists.filter(
+      onlyMusicPlaylists(response.data.toJellyfinLibraryPage(), response),
+    );
   }
 
   @override

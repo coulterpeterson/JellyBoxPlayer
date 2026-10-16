@@ -260,6 +260,7 @@ class LidarrClient {
     );
     if (album.isInLidarr) {
       await setMonitored([album.id], monitored: true);
+      await ensureArtistMonitored(album.artistId);
       await searchAlbum(album.id);
       return this.album(album.id);
     }
@@ -298,7 +299,25 @@ class LidarrClient {
       'addOptions': {'searchForNewAlbum': true},
       'artist': artist,
     });
-    return LidarrAlbum((data! as Map).cast<String, dynamic>());
+    final added = LidarrAlbum((data! as Map).cast<String, dynamic>());
+    await ensureArtistMonitored(added.artistId);
+    return added;
+  }
+
+  /// Lidarr only downloads an artist's monitored albums when the artist
+  /// itself is monitored ("Download monitored albums from this artist").
+  Future<void> ensureArtistMonitored(int artistId) async {
+    if (artistId <= 0) return;
+    final data = await _get('artist/$artistId');
+    final artist = (data! as Map).cast<String, dynamic>();
+    if (artist['monitored'] == true) return;
+    debugPrint(
+      '[Lidarr] artist ${artist['artistName']} was unmonitored, fixing',
+    );
+    await _put('artist/editor', {
+      'artistIds': [artistId],
+      'monitored': true,
+    });
   }
 
   Future<void> searchAlbum(int albumId) => _post('command', {
