@@ -51,7 +51,7 @@ struct WidgetSnapshot {
     case signedOut
   }
 
-  static let appGroup = "group.com.prodigytech.jellybox"
+  static let appGroup = "group.com.maplespace.jellybox"
   static let recentCount = 4
   static let defaultBackground = Color(red: 0x2B / 255, green: 0x2B / 255, blue: 0x30 / 255)
 
