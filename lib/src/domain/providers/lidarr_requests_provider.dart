@@ -643,6 +643,41 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
     );
   }
 
+  /// Lists the download folder (and its parent) as Lidarr sees it. Returns
+  /// a message when Lidarr can't see the files at all.
+  Future<String?> _checkFolderVisible(
+    LidarrClient lidarr,
+    LidarrRequest request,
+    String folder,
+  ) async {
+    try {
+      final entries = await lidarr.listFolder(folder);
+      debugPrint(
+        '[Lidarr] ${request.albumTitle}: Lidarr sees ${entries.length} '
+        'entries in $folder',
+      );
+      for (final entry in entries.take(40)) {
+        debugPrint('[Lidarr]   ${entry.name} (${entry.size} bytes)');
+      }
+      if (entries.isNotEmpty) return null;
+      final parent = folder.substring(0, folder.lastIndexOf('/'));
+      final siblings = await lidarr.listFolder(parent);
+      debugPrint(
+        '[Lidarr] Lidarr sees ${siblings.length} entries in $parent: '
+        '${[for (final e in siblings.take(15)) e.name].join(', ')}',
+      );
+      return siblings.isEmpty
+          ? "Lidarr can't see the download folder $parent. Check that "
+                'Lidarr and SABnzbd share it (volume mounts or Remote Path '
+                'Mappings)'
+          : 'Lidarr sees the download folder but not the files in it. '
+                'Check file permissions on $folder';
+    } on Object catch (error) {
+      debugPrint('[Lidarr] could not list $folder: $error');
+      return null;
+    }
+  }
+
   void _note(LidarrRequest request, String message) {
     final current = state.where((r) => r.id == request.id).firstOrNull;
     if (current != null && current.isActive) {
@@ -831,17 +866,13 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
     if (files.isEmpty) {
       final folder = item.outputPath;
       if (folder != null) {
-        try {
-          final entries = await lidarr.listFolder(folder);
-          debugPrint(
-            '[Lidarr] ${request.albumTitle}: download folder holds '
-            '${entries.length} entries',
-          );
-          for (final entry in entries.take(40)) {
-            debugPrint('[Lidarr]   ${entry.name} (${entry.size} bytes)');
-          }
-        } on Object catch (error) {
-          debugPrint('[Lidarr] could not list $folder: $error');
+        final problem = await _checkFolderVisible(lidarr, request, folder);
+        if (problem != null) {
+          // Lidarr can't see the download at all: a path or permission
+          // problem between it and the download client, not a bad release,
+          // so don't blocklist it.
+          _note(request, problem);
+          return;
         }
       }
     }
