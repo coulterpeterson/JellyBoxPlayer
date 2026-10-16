@@ -74,4 +74,54 @@ void main() {
     expect(copy.wanted?.single.title, 'Buddy Holly');
     expect(copy.displayName, 'Buddy Holly');
   });
+
+  group('rerouting', () {
+    test('- editionKey tells editions apart, normalizeTitle does not', () {
+      expect(
+        editionKey('Synchronicity (Super Deluxe Edition)'),
+        isNot(editionKey('Synchronicity')),
+      );
+      expect(
+        editionKey('Synchronicity (Super Deluxe Edition)'),
+        editionKey('Synchronicity - Super Deluxe Edition'),
+      );
+      expect(
+        normalizeTitle('Synchronicity (Super Deluxe Edition)'),
+        normalizeTitle('Synchronicity'),
+      );
+    });
+
+    test('- a rerouted request remembers what it tried', () {
+      final original = LidarrRequest(
+        id: '1',
+        lidarrAlbumId: 1072,
+        foreignAlbumId: 'rg-original',
+        albumTitle: 'Synchronicity',
+        artistName: 'The Police',
+        action: LidarrAction.download,
+        createdAt: DateTime(2026),
+        alternatives: const [(releaseGroupId: 'rg-best-of', title: 'Best Of')],
+      );
+      final deluxe = LidarrAlbum({
+        'id': 2001,
+        'title': 'Synchronicity (Super Deluxe Edition)',
+        'foreignAlbumId': 'rg-deluxe',
+        'artist': {'artistName': 'The Police'},
+      });
+
+      final moved = original.rerouted(
+        to: deluxe,
+        wanted: const [WantedTrack(title: 'Every Breath You Take')],
+        message: 'Only the deluxe edition is available',
+      );
+      final restored = LidarrRequest.fromJson(moved.toJson());
+
+      expect(restored.lidarrAlbumId, 2001);
+      expect(restored.albumTitle, 'Synchronicity (Super Deluxe Edition)');
+      expect(restored.tried, ['rg-original']);
+      expect(restored.wanted?.single.title, 'Every Breath You Take');
+      expect(restored.alternatives.single.releaseGroupId, 'rg-best-of');
+      expect(restored.message, 'Only the deluxe edition is available');
+    });
+  });
 }

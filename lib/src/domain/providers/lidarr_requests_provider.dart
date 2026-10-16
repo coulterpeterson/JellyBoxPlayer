@@ -92,6 +92,8 @@ class LidarrRequest {
     this.message,
     this.trimmed = false,
     this.serverAlbumId,
+    this.alternatives = const [],
+    this.tried = const [],
   });
 
   factory LidarrRequest.fromJson(Map<String, dynamic> json) => LidarrRequest(
@@ -113,6 +115,15 @@ class LidarrRequest {
     message: json['message'] as String?,
     trimmed: json['trimmed'] as bool? ?? false,
     serverAlbumId: json['serverAlbumId'] as String?,
+    alternatives: [
+      for (final entry in json['alternatives'] as List? ?? const [])
+        if (entry is Map)
+          (
+            releaseGroupId: entry['releaseGroupId'] as String,
+            title: entry['title'] as String? ?? '',
+          ),
+    ],
+    tried: [for (final id in json['tried'] as List? ?? const []) '$id'],
   );
 
   final String id;
@@ -137,6 +148,13 @@ class LidarrRequest {
   final String? message;
   final bool trimmed;
   final String? serverAlbumId;
+
+  /// Other albums with the requested songs, best first, to fall back on
+  /// when nobody has this one.
+  final List<({String releaseGroupId, String title})> alternatives;
+
+  /// Release groups already tried and abandoned for this request.
+  final List<String> tried;
 
   bool get isActive => stage != LidarrStage.done && stage != LidarrStage.failed;
 
@@ -187,6 +205,31 @@ class LidarrRequest {
     message: message != null ? message() : this.message,
     trimmed: trimmed ?? this.trimmed,
     serverAlbumId: serverAlbumId ?? this.serverAlbumId,
+    alternatives: alternatives,
+    tried: tried,
+  );
+
+  /// The same request, moved to another album that Lidarr can find.
+  LidarrRequest rerouted({
+    required LidarrAlbum to,
+    required List<WantedTrack>? wanted,
+    required String message,
+  }) => LidarrRequest(
+    id: id,
+    lidarrAlbumId: to.id,
+    foreignAlbumId: to.foreignAlbumId,
+    albumTitle: to.title,
+    artistName: to.artistName.isNotEmpty ? to.artistName : artistName,
+    action: action,
+    createdAt: createdAt,
+    coverUrl: to.coverUrl ?? coverUrl,
+    playlistId: playlistId,
+    playlistName: playlistName,
+    wanted: wanted,
+    keepExistingFiles: to.trackFileCount > 0,
+    message: message,
+    alternatives: alternatives,
+    tried: [...tried, foreignAlbumId],
   );
 
   Map<String, dynamic> toJson() => {
@@ -206,6 +249,14 @@ class LidarrRequest {
     'message': message,
     'trimmed': trimmed,
     'serverAlbumId': serverAlbumId,
+    'alternatives': [
+      for (final alternative in alternatives)
+        {
+          'releaseGroupId': alternative.releaseGroupId,
+          'title': alternative.title,
+        },
+    ],
+    'tried': tried,
   };
 }
 
@@ -234,6 +285,7 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
   final _lastSearch = <String, DateTime>{};
   final _releaseChecked = <String>{};
   final _lastDiagnosis = <String, DateTime>{};
+  final _importAttempted = <String>{};
   static const _diagnoseAfter = Duration(minutes: 3);
   static const _researchAfter = Duration(minutes: 15);
   final _deviceDownloads = <String>{};
@@ -317,6 +369,7 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
     required LidarrAction action,
     List<LidarrTrack>? wanted,
     LibraryItem? playlist,
+    List<CatalogAlbum> alternatives = const [],
   }) async {
     final lidarr = _lidarr;
     if (lidarr == null) throw const LidarrException('Connect Lidarr first');
@@ -342,6 +395,14 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
                 WantedTrack(title: track.title, recordingId: track.recordingId),
             ],
       keepExistingFiles: hadFiles,
+      alternatives: [
+        for (final alternative in alternatives)
+          if (alternative.releaseGroupId != added.foreignAlbumId)
+            (
+              releaseGroupId: alternative.releaseGroupId,
+              title: alternative.title,
+            ),
+      ],
     );
     state = [request, ...state];
     await _save();
@@ -397,6 +458,9 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
         .toList();
     if (queued.isNotEmpty) {
       _lastQueued[request.id] = DateTime.now();
+      for (final item in queued.where((item) => item.isStuckImporting)) {
+        await _fixImport(lidarr, request, item);
+      }
       final sizes = queued.fold(0.0, (sum, item) => sum + item.size);
       final left = queued.fold(0.0, (sum, item) => sum + item.sizeLeft);
       _update(
@@ -546,16 +610,224 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
         '${candidate.title} ${candidate.rejections}',
       );
     }
-    final message = candidates.isEmpty
-        ? 'Lidarr\'s indexers found no releases for this album'
-        : usable > 0
-        ? 'Lidarr found $usable usable releases. It should grab one soon'
-        : 'Lidarr found ${candidates.length} releases but rejected them all'
-              '${topReason == null ? '' : ': $topReason'}';
+    // 1. Lidarr likes some of these but hasn't grabbed one: grab it.
+    final best = candidates.where((c) => c.approved).firstOrNull;
+    if (best != null) {
+      debugPrint('[Lidarr] ${request.albumTitle}: grabbing ${best.title}');
+      await lidarr.grabRelease(best);
+      _note(request, 'Grabbing ${best.title}');
+      return;
+    }
+
+    // 2. What's out there belongs to another edition: switch to it.
+    final editions = [
+      for (final candidate in candidates.where((c) => c.isWrongAlbum))
+        candidate.albumTitle,
+    ];
+    if (editions.isNotEmpty &&
+        await _rerouteToEdition(lidarr, request, album, editions)) {
+      return;
+    }
+
+    // 3. Nothing usable at all: try another album with these songs.
+    if (await _rerouteToAlternative(lidarr, request, album)) return;
+
+    _note(
+      request,
+      candidates.isEmpty
+          ? "Lidarr's indexers found no releases for this album"
+          : 'Lidarr found ${candidates.length} releases but rejected them all'
+                '${topReason == null ? '' : ': $topReason'}',
+    );
+  }
+
+  void _note(LidarrRequest request, String message) {
     final current = state.where((r) => r.id == request.id).firstOrNull;
     if (current != null && current.isActive) {
       _update(current.copyWith(message: () => message));
     }
+  }
+
+  static const _maxReroutes = 4;
+
+  /// Moves [request] to the Lidarr album the available releases belong to,
+  /// such as a deluxe edition, keeping only the originally requested songs.
+  Future<bool> _rerouteToEdition(
+    LidarrClient lidarr,
+    LidarrRequest request,
+    LidarrAlbum album,
+    List<String> editionTitles,
+  ) async {
+    if (request.tried.length >= _maxReroutes) return false;
+    final siblings = await lidarr.artistAlbums(album.artistId);
+    for (final title in editionTitles) {
+      final key = editionKey(title);
+      final target = siblings
+          .where(
+            (s) =>
+                s.id != album.id &&
+                !request.tried.contains(s.foreignAlbumId) &&
+                editionKey(s.title) == key,
+          )
+          .firstOrNull;
+      if (target == null) continue;
+      return _switchTo(
+        lidarr,
+        request,
+        album,
+        target,
+        'Only "${target.title}" is available, so getting that instead',
+      );
+    }
+    return false;
+  }
+
+  /// Falls back to the next album that has the requested songs, or for a
+  /// whole album, to another edition of it.
+  Future<bool> _rerouteToAlternative(
+    LidarrClient lidarr,
+    LidarrRequest request,
+    LidarrAlbum album,
+  ) async {
+    if (request.tried.length >= _maxReroutes) return false;
+    final tried = {...request.tried, album.foreignAlbumId};
+    LidarrAlbum? target;
+    if (request.wanted case final wanted? when wanted.isNotEmpty) {
+      for (final alternative in request.alternatives) {
+        if (tried.contains(alternative.releaseGroupId)) continue;
+        target = await lidarr.lookupAlbum(alternative.releaseGroupId);
+        if (target != null) break;
+      }
+    } else {
+      final base = normalizeTitle(album.title);
+      final siblings = await lidarr.artistAlbums(album.artistId);
+      target = siblings
+          .where(
+            (s) =>
+                !tried.contains(s.foreignAlbumId) &&
+                normalizeTitle(s.title) == base,
+          )
+          .firstOrNull;
+    }
+    if (target == null) return false;
+    return _switchTo(
+      lidarr,
+      request,
+      album,
+      target,
+      'Nobody has "${album.title}", so trying "${target.title}"',
+    );
+  }
+
+  Future<bool> _switchTo(
+    LidarrClient lidarr,
+    LidarrRequest request,
+    LidarrAlbum from,
+    LidarrAlbum to,
+    String message,
+  ) async {
+    debugPrint('[Lidarr] ${request.albumTitle}: rerouting to "${to.title}"');
+    // A whole-album request keeps the original album's songs, so a deluxe
+    // edition's bonus tracks get trimmed off.
+    final wanted =
+        request.wanted ??
+        [
+          for (final track in await lidarr.tracks(from.id))
+            WantedTrack(title: track.title, recordingId: track.recordingId),
+        ];
+    final added = await lidarr.addAlbum(to);
+    if (from.trackFileCount == 0) {
+      await lidarr.setMonitored([from.id], monitored: false);
+    }
+    _releaseChecked.remove(request.id);
+    _lastDiagnosis.remove(request.id);
+    _lastQueued.remove(request.id);
+    _lastSearch[request.id] = DateTime.now();
+    final current =
+        state.where((r) => r.id == request.id).firstOrNull ?? request;
+    _update(
+      current
+          .rerouted(
+            to: added,
+            wanted: wanted.isEmpty ? null : wanted,
+            message: message,
+          )
+          .copyWith(stage: LidarrStage.searching),
+    );
+    return true;
+  }
+
+  /// A download finished but Lidarr won't import it. Import the files
+  /// Lidarr could match itself, the way its interactive import does, and
+  /// otherwise say why.
+  Future<void> _fixImport(
+    LidarrClient lidarr,
+    LidarrRequest request,
+    LidarrQueueItem item,
+  ) async {
+    final downloadId = item.downloadId;
+    if (downloadId == null || !_importAttempted.add(downloadId)) return;
+    debugPrint(
+      '[Lidarr] ${request.albumTitle}: stuck importing ${item.title}: '
+      '${item.statusMessages}',
+    );
+    final files = await lidarr.manualImportCandidates(
+      downloadId: downloadId,
+      folder: item.outputPath,
+    );
+    final importable = <Map<String, dynamic>>[];
+    final reasons = <String>{};
+    for (final file in files) {
+      final rejections = [
+        for (final rejection in file['rejections'] as List? ?? const [])
+          if (rejection is Map) '${rejection['reason']}' else '$rejection',
+      ];
+      reasons.addAll(rejections);
+      final tracks = [
+        for (final track in file['tracks'] as List? ?? const [])
+          if (track is Map) (track['id'] as num).toInt(),
+      ];
+      final artistId = ((file['artist'] as Map?)?['id'] as num?)?.toInt() ?? 0;
+      final albumId = ((file['album'] as Map?)?['id'] as num?)?.toInt() ?? 0;
+      debugPrint(
+        '[Lidarr]   ${file['name']} -> album $albumId tracks $tracks '
+        '$rejections',
+      );
+      // Quality and upgrade rejections are Lidarr's profile decisions;
+      // leave those alone.
+      final profileRejection = rejections.any(
+        (r) =>
+            r.toLowerCase().contains('upgrade') ||
+            r.toLowerCase().contains('quality'),
+      );
+      if (tracks.isEmpty || albumId == 0 || profileRejection) continue;
+      importable.add({
+        'path': file['path'],
+        'artistId': artistId,
+        'albumId': albumId,
+        'albumReleaseId': file['albumReleaseId'],
+        'trackIds': tracks,
+        'quality': file['quality'],
+        'releaseGroup': file['releaseGroup'],
+        'indexerFlags': file['indexerFlags'] ?? 0,
+        'downloadId': downloadId,
+        'disableReleaseSwitching': false,
+      });
+    }
+    if (importable.isNotEmpty) {
+      debugPrint(
+        '[Lidarr] ${request.albumTitle}: importing ${importable.length} '
+        'of ${files.length} files by hand',
+      );
+      await lidarr.manualImport(importable);
+      _note(request, 'Importing ${importable.length} songs');
+      return;
+    }
+    _note(
+      request,
+      "Lidarr downloaded it but can't import it: "
+      '${reasons.isNotEmpty ? reasons.first : item.statusMessages.firstOrNull ?? 'no matching files'}',
+    );
   }
 
   /// Keeps a stalled request alive: Lidarr can unmonitor an album while it

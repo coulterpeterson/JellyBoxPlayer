@@ -215,8 +215,7 @@ class LidarrClient {
   /// Asks Lidarr's indexers what they have for an album, like Lidarr's
   /// interactive search, including why each result would be rejected.
   /// This can take a while; indexers are queried live.
-  Future<List<({String title, bool rejected, List<String> rejections})>>
-  releaseCandidates(int albumId) async {
+  Future<List<LidarrReleaseCandidate>> releaseCandidates(int albumId) async {
     final data = await _send(
       'GET release albumId=$albumId',
       () => _dio.getUri<Object?>(
@@ -224,18 +223,43 @@ class LidarrClient {
         options: _options.copyWith(receiveTimeout: const Duration(minutes: 2)),
       ),
     );
-    return [
-      for (final json in _list(data))
-        (
-          title: json['title'] as String? ?? '',
-          rejected: json['rejected'] as bool? ?? false,
-          rejections: [
-            for (final reason in json['rejections'] as List? ?? const [])
-              '$reason',
-          ],
-        ),
-    ];
+    return [for (final json in _list(data)) LidarrReleaseCandidate(json)];
   }
+
+  /// Sends a release from [releaseCandidates] to the download client.
+  Future<void> grabRelease(LidarrReleaseCandidate release) =>
+      _post('release', {'guid': release.guid, 'indexerId': release.indexerId});
+
+  /// What Lidarr's import makes of a finished download: each file with the
+  /// album and tracks it matched, and why it would be rejected.
+  Future<List<Map<String, dynamic>>> manualImportCandidates({
+    required String downloadId,
+    String? folder,
+    int artistId = 0,
+  }) async {
+    final data = await _send(
+      'GET manualimport downloadId=$downloadId',
+      () => _dio.getUri<Object?>(
+        _uri('manualimport', {
+          'downloadId': downloadId,
+          'folder': ?folder,
+          if (artistId > 0) 'artistId': artistId,
+          'filterExistingFiles': false,
+        }),
+        options: _options.copyWith(receiveTimeout: const Duration(minutes: 2)),
+      ),
+    );
+    return _list(data);
+  }
+
+  /// Imports files the way Lidarr's interactive import does.
+  Future<void> manualImport(List<Map<String, dynamic>> files) =>
+      _post('command', {
+        'name': 'ManualImport',
+        'importMode': 'auto',
+        'replaceExistingFiles': false,
+        'files': files,
+      });
 
   Future<List<LidarrQueueItem>> queue() async {
     final data = await _get('queue', {

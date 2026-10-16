@@ -128,7 +128,66 @@ class LidarrQueueItem {
       json['trackedDownloadState'] as String? ?? '';
 
   double? get progress => size > 0 ? (1 - sizeLeft / size).clamp(0, 1) : null;
+
+  String? get downloadId => json['downloadId'] as String?;
+
+  String? get outputPath => json['outputPath'] as String?;
+
+  String get title => json['title'] as String? ?? '';
+
+  /// Downloaded, but Lidarr hasn't (or couldn't) import it.
+  bool get isStuckImporting {
+    final state = trackedDownloadState.toLowerCase();
+    return state == 'importpending' ||
+        state == 'importblocked' ||
+        state == 'importfailed' ||
+        (state == 'downloading' && statusMessages.isNotEmpty && sizeLeft == 0);
+  }
+
+  /// Lidarr's explanations, such as "No files found are eligible for
+  /// import".
+  List<String> get statusMessages => [
+    for (final status in json['statusMessages'] as List? ?? const [])
+      if (status is Map)
+        for (final message in status['messages'] as List? ?? const [])
+          '$message',
+  ];
 }
+
+/// A release an indexer returned for an album, with Lidarr's verdict.
+class LidarrReleaseCandidate {
+  const LidarrReleaseCandidate(this.json);
+
+  final Map<String, dynamic> json;
+
+  String get title => json['title'] as String? ?? '';
+
+  String get guid => json['guid'] as String? ?? '';
+
+  int get indexerId => (json['indexerId'] as num?)?.toInt() ?? 0;
+
+  /// The album Lidarr parsed from the release name.
+  String get albumTitle => json['albumTitle'] as String? ?? '';
+
+  String get artistName => json['artistName'] as String? ?? '';
+
+  bool get approved => json['approved'] as bool? ?? false;
+
+  bool get rejected => json['rejected'] as bool? ?? !approved;
+
+  List<String> get rejections => [
+    for (final reason in json['rejections'] as List? ?? const []) '$reason',
+  ];
+
+  bool get isWrongAlbum => rejections.any((r) => r == 'Wrong album');
+}
+
+/// Compares album titles including edition words ("Deluxe Edition"), unlike
+/// [normalizeTitle] which drops bracketed parts.
+String editionKey(String value) => value
+    .toLowerCase()
+    .replaceAll('&', 'and')
+    .replaceAll(RegExp('[^a-z0-9]+'), '');
 
 /// Normalises a track or album title so names from Lidarr, MusicBrainz and
 /// the media server can be compared.

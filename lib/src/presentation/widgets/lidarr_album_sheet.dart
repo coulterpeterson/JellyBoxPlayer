@@ -20,6 +20,7 @@ Future<void> requestFromLidarr(
   LidarrAlbum album,
   LidarrAction action, {
   List<LidarrTrack>? wanted,
+  List<CatalogAlbum> alternatives = const [],
 }) async {
   final messenger = ScaffoldMessenger.maybeOf(context);
   LibraryItem? playlist;
@@ -41,6 +42,7 @@ Future<void> requestFromLidarr(
           action: action,
           wanted: wanted == null || wanted.isEmpty ? null : wanted,
           playlist: playlist,
+          alternatives: alternatives,
         );
     messenger?.showSnackBar(
       SnackBar(
@@ -133,7 +135,14 @@ class _LidarrAlbumSheetState extends ConsumerState<LidarrAlbumSheet> {
         ? null
         : [for (final index in _selected.toList()..sort()) tracks[index]];
     final navigator = Navigator.of(context);
-    await requestFromLidarr(context, ref, album, action, wanted: wanted);
+    await requestFromLidarr(
+      context,
+      ref,
+      album,
+      action,
+      wanted: wanted,
+      alternatives: widget.pick?.alternatives ?? const [],
+    );
     if (mounted) navigator.pop();
   }
 
