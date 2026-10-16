@@ -507,6 +507,16 @@ class JellyfinClient implements MediaServerClient {
   }
 
   @override
+  Future<void> deleteItem(String itemId) async {
+    await _dio.deleteUri<Object?>(_resolve('Items/$itemId', const {}));
+  }
+
+  @override
+  Future<void> refreshLibrary() async {
+    await _dio.postUri<Object?>(_resolve('Library/Refresh', const {}));
+  }
+
+  @override
   Future<Lyrics?> getLyrics(String itemId) async {
     try {
       final response = await _api.getLyrics(itemId: itemId);

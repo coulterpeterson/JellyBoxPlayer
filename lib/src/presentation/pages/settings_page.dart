@@ -255,6 +255,16 @@ class SettingsPage extends ConsumerWidget {
                     ),
                     _settingCheckbox(
                       ref: ref,
+                      setting: AppSetting.ipodMode,
+                      label: 'iPod mode',
+                    ),
+                    _settingNote(
+                      context,
+                      'Turns the app into an iPod classic with a click wheel '
+                      'and games. Leave it from the iPod Settings menu.',
+                    ),
+                    _settingCheckbox(
+                      ref: ref,
                       setting: AppSetting.letterRuler,
                       label: 'Show A–Z index on browse lists sorted by name',
                     ),
@@ -398,6 +408,14 @@ class SettingsPage extends ConsumerWidget {
                     ],
                     _sectionHeader('ListenBrainz'),
                     const ListenBrainzSettings(),
+                    _sectionHeader('Lidarr'),
+                    const LidarrSettings(),
+                    _settingNote(
+                      context,
+                      'Search results include albums Lidarr can fetch for '
+                      'your server. Requests keep going while the app is '
+                      'open; progress shows on the Downloads page.',
+                    ),
                     _sectionHeader('Privacy'),
                     _settingCheckbox(
                       ref: ref,

@@ -89,12 +89,37 @@ class SongRowView extends ConsumerWidget {
     final ratingsSupported = ref.watch(
       serverCapabilitiesProvider.select((c) => c.ratings),
     );
-    final canRate = isDesktop && onRatingChanged != null;
+    final selection = SongSelectionScope.maybeOf(context);
+    final selecting = selection?.isActive ?? false;
+    final canRate = isDesktop && onRatingChanged != null && !selecting;
     final showRating =
         ratingsSupported && (canRate || song.userData.rating > 0);
 
+    final Widget artwork = position != null
+        ? Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: Text('$position'),
+          )
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image(
+              image: _coverImage(ref),
+              width: imageSize,
+              height: imageSize,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Image.asset(
+                Images.album,
+                width: imageSize,
+                height: imageSize,
+                fit: BoxFit.cover,
+              ),
+            ),
+          );
+
     return GestureDetector(
-      onLongPress: (!isDesktop && optionsBuilder != null)
+      onLongPress: selection != null
+          ? () => startSongSelection(context, song)
+          : (!isDesktop && optionsBuilder != null)
           ? () => showLongPressContextMenuSheet(
               context,
               actions: optionsBuilder!(context),
@@ -108,7 +133,11 @@ class SongRowView extends ConsumerWidget {
             )
           : null,
       child: SimpleListTile(
-        onTap: onTap != null ? () => onTap!(song) : null,
+        onTap: selecting
+            ? () => selection!.toggle(song)
+            : onTap != null
+            ? () => onTap!(song)
+            : null,
         hoverColor: theme.colorScheme.onPrimary.withOpacity(0.06),
         backgroundColor: isPlaying
             ? playingColor ??
@@ -120,26 +149,15 @@ class SongRowView extends ConsumerWidget {
           optionsBuilder != null ? 4 : horizontal,
           8,
         ),
-        leading: position != null
-            ? Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: Text('$position'),
+        leading: selecting
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SelectionCheck(selected: selection!.isSelected(song.id)),
+                  artwork,
+                ],
               )
-            : ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Image(
-                  image: _coverImage(ref),
-                  width: imageSize,
-                  height: imageSize,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Image.asset(
-                    Images.album,
-                    width: imageSize,
-                    height: imageSize,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
+            : artwork,
         leadingToTitle: isMobile ? 12 : 16,
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -257,7 +275,7 @@ class SongRowView extends ConsumerWidget {
                 key: testKeys?.downloadedIcon,
                 color: Colors.green,
               ),
-            if (isDesktop)
+            if (isDesktop && !selecting)
               HoverIconButton(
                 onPressed: onLikePressed != null
                     ? () => onLikePressed!(song)
@@ -268,7 +286,7 @@ class SongRowView extends ConsumerWidget {
                 selectedIcon: const Icon(CupertinoIcons.heart_fill),
                 isSelected: song.userData.isFavorite,
               ),
-            if (optionsBuilder != null)
+            if (optionsBuilder != null && !selecting)
               ContextMenuButton(actionsBuilder: optionsBuilder!),
             if (trailing case final trailing?) trailing,
           ],

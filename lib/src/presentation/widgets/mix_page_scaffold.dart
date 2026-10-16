@@ -9,6 +9,7 @@ import 'package:jplayer/src/presentation/widgets/cover_mosaic.dart';
 import 'package:jplayer/src/presentation/widgets/custom_scrollbar.dart';
 import 'package:jplayer/src/presentation/widgets/gradient_background.dart';
 import 'package:jplayer/src/presentation/widgets/playlist_controls.dart';
+import 'package:jplayer/src/presentation/widgets/song_selection.dart';
 
 class MixPageScaffold extends StatefulWidget {
   const MixPageScaffold({
@@ -106,50 +107,53 @@ class _MixPageScaffoldState extends State<MixPageScaffold> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GradientBackground(
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CupertinoNavigationBar(
-                previousPageTitle: widget.previousPageTitle,
-                backgroundColor: Colors.transparent,
-                enableBackgroundFilterBlur: false,
-                padding: EdgeInsetsDirectional.symmetric(horizontal: _edge),
-                middle: ValueListenableBuilder(
-                  valueListenable: _titleOpacity,
-                  builder: (context, opacity, child) => Transform.translate(
-                    offset: Offset(0, 8 - 8 * opacity),
-                    child: Opacity(opacity: opacity, child: child),
-                  ),
-                  child: Text(
-                    widget.name,
-                    overflow: TextOverflow.clip,
-                    style: TextStyle(
-                      fontSize: _device.isMobile ? 14 : 20,
-                      color: _theme.colorScheme.onPrimary,
+      body: SongSelectionHost(
+        songs: () => widget.songs,
+        child: GradientBackground(
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CupertinoNavigationBar(
+                  previousPageTitle: widget.previousPageTitle,
+                  backgroundColor: Colors.transparent,
+                  enableBackgroundFilterBlur: false,
+                  padding: EdgeInsetsDirectional.symmetric(horizontal: _edge),
+                  middle: ValueListenableBuilder(
+                    valueListenable: _titleOpacity,
+                    builder: (context, opacity, child) => Transform.translate(
+                      offset: Offset(0, 8 - 8 * opacity),
+                      child: Opacity(opacity: opacity, child: child),
+                    ),
+                    child: Text(
+                      widget.name,
+                      overflow: TextOverflow.clip,
+                      style: TextStyle(
+                        fontSize: _device.isMobile ? 14 : 20,
+                        color: _theme.colorScheme.onPrimary,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: CustomScrollbar(
-                  controller: _scrollController,
-                  child: CustomScrollView(
+                Expanded(
+                  child: CustomScrollbar(
                     controller: _scrollController,
-                    slivers: [
-                      if (_device.isDesktop)
-                        _desktopHeader()
-                      else
-                        ..._stackedHeader(),
-                      _controls(),
-                      ...widget.slivers,
-                    ],
+                    child: CustomScrollView(
+                      controller: _scrollController,
+                      slivers: [
+                        if (_device.isDesktop)
+                          _desktopHeader()
+                        else
+                          ..._stackedHeader(),
+                        _controls(),
+                        ...widget.slivers,
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

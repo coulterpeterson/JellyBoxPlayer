@@ -183,6 +183,13 @@ class DownloadsPage extends StatelessWidget {
             final albums = ref.watch(downloadedAlbumsProvider);
             final playlists = ref.watch(downloadedPlaylistsProvider);
             final songs = ref.watch(standaloneDownloadedSongsProvider);
+            final pending = ref.watch(pendingDownloadsProvider);
+            final requests = [
+              for (final request in ref.watch(activeLidarrRequestsProvider))
+                // The device download shows its own card from here on.
+                if (request.stage != LidarrStage.downloadingToDevice) request,
+            ];
+            final inProgress = pending.length + requests.length;
 
             if (!albums.hasValue || !playlists.hasValue || !songs.hasValue) {
               final error = albums.error ?? playlists.error ?? songs.error;
@@ -203,11 +210,13 @@ class DownloadsPage extends StatelessWidget {
               for (final song in songs.valueOrNull ?? const <DownloadedSong>[])
                 song.item,
             ];
-            final sections = [
-              playlistItems,
-              albumItems,
-              songItems,
-            ].where((items) => items.isNotEmpty).length;
+            final sections =
+                [
+                  playlistItems,
+                  albumItems,
+                  songItems,
+                ].where((items) => items.isNotEmpty).length +
+                (inProgress > 0 ? 1 : 0);
 
             if (sections == 0) {
               return const SliverToBoxAdapter(
@@ -217,6 +226,20 @@ class DownloadsPage extends StatelessWidget {
 
             return SliverMainAxisGroup(
               slivers: [
+                if (inProgress > 0) ...[
+                  if (sections > 1) _sectionHeader(device, 'Downloading'),
+                  SliverGrid.builder(
+                    gridDelegate: _gridDelegate(device),
+                    itemBuilder: (context, index) => index < requests.length
+                        ? LidarrRequestCard(request: requests[index])
+                        : PendingDownloadCard(
+                            item: pending[index - requests.length],
+                          ),
+                    itemCount: inProgress,
+                  ),
+                  if (sections > 1)
+                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                ],
                 if (playlistItems.isNotEmpty) ...[
                   if (sections > 1) _sectionHeader(device, 'Playlists'),
                   SliverGrid.builder(

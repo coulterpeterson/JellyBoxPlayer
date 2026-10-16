@@ -6,3 +6,4 @@ export 'refresh_home_sections.dart';
 export 'search_categories.dart';
 export 'rate_item.dart';
 export 'toggle_favourite.dart';
+export 'server_delete.dart';

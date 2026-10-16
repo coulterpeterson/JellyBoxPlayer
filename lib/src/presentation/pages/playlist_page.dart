@@ -126,144 +126,165 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
   Widget build(BuildContext context) {
     final shown = _order.apply(songs);
     return Scaffold(
-      body: GradientBackground(
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CupertinoNavigationBar(
-                previousPageTitle: 'Playlists',
-                backgroundColor: Colors.transparent,
-                padding: EdgeInsetsDirectional.symmetric(
-                  horizontal: _device.isMobile ? 16 : 30,
-                ),
-                middle: ValueListenableBuilder(
-                  valueListenable: _titleOpacity,
-                  builder: (context, opacity, child) => Transform.translate(
-                    offset: Offset(0, 8 - 8 * opacity),
-                    child: Opacity(
-                      opacity: opacity,
-                      child: child,
+      body: SongSelectionHost(
+        songs: () => shown,
+        onDeleted: (_) => unawaited(_getSongs()),
+        onChanged: () => unawaited(_getSongs()),
+        extraActions: (selected, done) => [
+          ContextMenuAction(
+            entry: ContextMenuEntry.removeFromPlaylist,
+            icon: const Icon(Icons.playlist_remove),
+            label: const Text('Remove from playlist'),
+            run: () async {
+              done();
+              await _removeAllFromPlaylist(selected);
+            },
+          ),
+        ],
+        child: GradientBackground(
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CupertinoNavigationBar(
+                  previousPageTitle: 'Playlists',
+                  backgroundColor: Colors.transparent,
+                  padding: EdgeInsetsDirectional.symmetric(
+                    horizontal: _device.isMobile ? 16 : 30,
+                  ),
+                  middle: ValueListenableBuilder(
+                    valueListenable: _titleOpacity,
+                    builder: (context, opacity, child) => Transform.translate(
+                      offset: Offset(0, 8 - 8 * opacity),
+                      child: Opacity(
+                        opacity: opacity,
+                        child: child,
+                      ),
+                    ),
+                    child: Text(
+                      widget.playlist.name,
+                      overflow: TextOverflow.clip,
+                      style: TextStyle(
+                        fontSize: _device.isMobile ? 14 : 20,
+                        color: _theme.colorScheme.onPrimary,
+                      ),
                     ),
                   ),
-                  child: Text(
-                    widget.playlist.name,
-                    overflow: TextOverflow.clip,
-                    style: TextStyle(
-                      fontSize: _device.isMobile ? 14 : 20,
-                      color: _theme.colorScheme.onPrimary,
-                    ),
-                  ),
                 ),
-              ),
-              Expanded(
-                child: CustomScrollbar(
-                  controller: _scrollController,
-                  child: CustomScrollView(
+                Expanded(
+                  child: CustomScrollbar(
                     controller: _scrollController,
-                    slivers: [
-                      if (_device.isDesktop)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(30, 0, 30, 12),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Image(
-                                  image: albumCover,
-                                  height: 254,
-                                ),
-                                const SizedBox(width: 38),
-                                Expanded(child: _albumPanel()),
-                              ],
+                    child: CustomScrollView(
+                      controller: _scrollController,
+                      slivers: [
+                        if (_device.isDesktop)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(30, 0, 30, 12),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Image(
+                                    image: albumCover,
+                                    height: 254,
+                                  ),
+                                  const SizedBox(width: 38),
+                                  Expanded(child: _albumPanel()),
+                                ],
+                              ),
+                            ),
+                          )
+                        else ...[
+                          SliverPadding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: _device.isMobile ? 16 : 30,
+                            ),
+                            sliver: SliverPersistentHeader(
+                              pinned: true,
+                              delegate: _FadeOutImageDelegate(
+                                image: albumCover,
+                                isMobile: _device.isMobile,
+                              ),
                             ),
                           ),
-                        )
-                      else ...[
+                          SliverPadding(
+                            padding: EdgeInsets.only(
+                              left: _device.isMobile ? 16 : 30,
+                              top: _device.isMobile ? 15 : 35,
+                              right: _device.isMobile ? 16 : 30,
+                              bottom: _device.isMobile ? 0 : 18,
+                            ),
+                            sliver: SliverToBoxAdapter(
+                              child: _albumPanelMobile(),
+                            ),
+                          ),
+                        ],
                         SliverPadding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: _device.isMobile ? 16 : 30,
+                          padding: EdgeInsets.fromLTRB(
+                            _device.isMobile ? 16 : 30,
+                            _device.isMobile ? 12 : 4,
+                            _device.isMobile ? 16 : 30,
+                            8,
                           ),
-                          sliver: SliverPersistentHeader(
-                            pinned: true,
-                            delegate: _FadeOutImageDelegate(
-                              image: albumCover,
-                              isMobile: _device.isMobile,
-                            ),
-                          ),
+                          sliver: SliverToBoxAdapter(child: _controls()),
                         ),
-                        SliverPadding(
-                          padding: EdgeInsets.only(
-                            left: _device.isMobile ? 16 : 30,
-                            top: _device.isMobile ? 15 : 35,
-                            right: _device.isMobile ? 16 : 30,
-                            bottom: _device.isMobile ? 0 : 18,
+                        if (_songsLoaded && songs.isEmpty)
+                          const SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(child: Text("There's no songs yet.")),
                           ),
-                          sliver: SliverToBoxAdapter(
-                            child: _albumPanelMobile(),
-                          ),
+                        SliverList.builder(
+                          itemBuilder: (context, index) =>
+                              ValueListenableBuilder(
+                                valueListenable: _currentSong,
+                                builder: (context, item, other) {
+                                  final song = shown[index];
+                                  return SongRowView(
+                                    song: song,
+                                    isPlaying:
+                                        item != null && song.id == item.id,
+                                    onTap: (song) => ref
+                                        .read(playbackProvider.notifier)
+                                        .play(
+                                          song,
+                                          shown,
+                                          widget.playlist,
+                                          sourceId: widget.playlist.id,
+                                        ),
+                                    position: index + 1,
+                                    edgePadding: _device.isMobile ? 16 : 30,
+                                    onLikePressed: _onSongLikePressed,
+                                    onRatingChanged: _onSongRated,
+                                    optionsBuilder: (context) => [
+                                      ContextMenuAction(
+                                        entry:
+                                            ContextMenuEntry.removeFromPlaylist,
+                                        icon: const Icon(Icons.playlist_remove),
+                                        label: const Text(
+                                          'Remove from playlist',
+                                        ),
+                                        run: () => _onRemoveFromPlaylist(song),
+                                      ),
+                                      ...contextMenuActions(
+                                        context,
+                                        ref,
+                                        song,
+                                        scope: ContextMenuScope.playlistPage,
+                                        onLike: _onSongLikePressed,
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                          itemCount: shown.length,
                         ),
                       ],
-                      SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          _device.isMobile ? 16 : 30,
-                          _device.isMobile ? 12 : 4,
-                          _device.isMobile ? 16 : 30,
-                          8,
-                        ),
-                        sliver: SliverToBoxAdapter(child: _controls()),
-                      ),
-                      if (_songsLoaded && songs.isEmpty)
-                        const SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Center(child: Text("There's no songs yet.")),
-                        ),
-                      SliverList.builder(
-                        itemBuilder: (context, index) => ValueListenableBuilder(
-                          valueListenable: _currentSong,
-                          builder: (context, item, other) {
-                            final song = shown[index];
-                            return SongRowView(
-                              song: song,
-                              isPlaying: item != null && song.id == item.id,
-                              onTap: (song) => ref
-                                  .read(playbackProvider.notifier)
-                                  .play(
-                                    song,
-                                    shown,
-                                    widget.playlist,
-                                    sourceId: widget.playlist.id,
-                                  ),
-                              position: index + 1,
-                              edgePadding: _device.isMobile ? 16 : 30,
-                              onLikePressed: _onSongLikePressed,
-                              onRatingChanged: _onSongRated,
-                              optionsBuilder: (context) => [
-                                ContextMenuAction(
-                                  entry: ContextMenuEntry.removeFromPlaylist,
-                                  icon: const Icon(Icons.playlist_remove),
-                                  label: const Text('Remove from playlist'),
-                                  run: () => _onRemoveFromPlaylist(song),
-                                ),
-                                ...contextMenuActions(
-                                  context,
-                                  ref,
-                                  song,
-                                  scope: ContextMenuScope.playlistPage,
-                                  onLike: _onSongLikePressed,
-                                ),
-                              ],
-                            );
-                          },
-                        ),
-                        itemCount: shown.length,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -280,6 +301,20 @@ class _PlaylistPageState extends ConsumerState<PlaylistPage> {
 
   Future<void> _onSongRated(LibraryItem song, int rating) async {
     await rateItem(ref, song, rating);
+    unawaited(_getSongs());
+  }
+
+  Future<void> _removeAllFromPlaylist(List<LibraryItem> selected) async {
+    final client = ref.read(mediaServerClientProvider);
+    for (final song in selected) {
+      final entryId = song.playlistItemId;
+      if (entryId == null) continue;
+      await client.removePlaylistItem(
+        playlistId: widget.playlist.id,
+        entryId: entryId,
+      );
+    }
+    ref.read(downloadSyncProvider).syncPlaylist(widget.playlist.id);
     unawaited(_getSongs());
   }
 

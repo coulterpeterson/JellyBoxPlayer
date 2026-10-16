@@ -32,6 +32,7 @@ class EmbyClient implements MediaServerClient {
     required this.token,
     required this.deviceId,
   }) : _api = EmbyApi(dio, baseUrl: baseUrl),
+       _dio = dio,
        _baseUrl = baseUrl;
 
   static const _defaultImageSize = 420;
@@ -46,6 +47,7 @@ class EmbyClient implements MediaServerClient {
   Future<MediaServerCapabilities> resolveCapabilities() async => capabilities;
 
   final EmbyApi _api;
+  final Dio _dio;
   final String _baseUrl;
   final String userId;
   final String token;
@@ -454,6 +456,16 @@ class EmbyClient implements MediaServerClient {
     required String entryId,
   }) async {
     await _api.removePlaylistItem(playlistId: playlistId, entryIds: entryId);
+  }
+
+  @override
+  Future<void> deleteItem(String itemId) async {
+    await _dio.postUri<Object?>(_resolve('Items/$itemId/Delete', const {}));
+  }
+
+  @override
+  Future<void> refreshLibrary() async {
+    await _dio.postUri<Object?>(_resolve('Library/Refresh', const {}));
   }
 
   @override

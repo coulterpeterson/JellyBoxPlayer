@@ -62,6 +62,7 @@ class SubsonicClient implements MediaServerClient {
   static const _albumFanOut = 8;
   static const _baseCapabilities = MediaServerCapabilities(
     similarAlbums: false,
+    deleteItems: false,
     playlistFavourites: false,
     ratings: true,
     likedTimestamp: true,
@@ -811,6 +812,16 @@ class SubsonicClient implements MediaServerClient {
   @override
   Future<void> deletePlaylist(String playlistId) =>
       _api.deletePlaylist(playlistId);
+
+  @override
+  Future<void> deleteItem(String itemId) => throw UnsupportedError(
+    'Subsonic servers do not allow deleting library items',
+  );
+
+  @override
+  Future<void> refreshLibrary() async {
+    await _api.call('startScan');
+  }
 
   @override
   Future<void> addPlaylistItems({

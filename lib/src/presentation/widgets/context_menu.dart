@@ -38,6 +38,9 @@ enum ContextMenuEntry {
   removeFromQueue,
   removeFromPlaylist,
   deletePlaylist,
+  deleteFromServer,
+  requestFromLidarr,
+  selectSongs,
 }
 
 const contextMenuLayout =
@@ -53,6 +56,7 @@ const contextMenuLayout =
           ContextMenuEntry.goToArtist,
           ContextMenuEntry.goToAlbum,
           ContextMenuEntry.metadataLinks,
+          ContextMenuEntry.deleteFromServer,
         ],
         ContextMenuScope.albumPage: [
           ContextMenuEntry.instantMix,
@@ -63,6 +67,7 @@ const contextMenuLayout =
           ContextMenuEntry.like,
           ContextMenuEntry.goToArtist,
           ContextMenuEntry.metadataLinks,
+          ContextMenuEntry.deleteFromServer,
         ],
         ContextMenuScope.playlistPage: [
           ContextMenuEntry.instantMix,
@@ -73,6 +78,7 @@ const contextMenuLayout =
           ContextMenuEntry.goToArtist,
           ContextMenuEntry.goToAlbum,
           ContextMenuEntry.metadataLinks,
+          ContextMenuEntry.deleteFromServer,
         ],
         ContextMenuScope.nowPlaying: [
           ContextMenuEntry.instantMix,
@@ -97,12 +103,26 @@ const contextMenuLayout =
         ContextMenuScope.browse: [
           ContextMenuEntry.play,
           ContextMenuEntry.instantMix,
+          ContextMenuEntry.addToPlaylist,
           ContextMenuEntry.playNext,
           ContextMenuEntry.addToQueue,
           ContextMenuEntry.download,
           ContextMenuEntry.like,
           ContextMenuEntry.goToArtist,
           ContextMenuEntry.metadataLinks,
+          ContextMenuEntry.deleteFromServer,
+        ],
+        ContextMenuScope.albumPage: [
+          ContextMenuEntry.play,
+          ContextMenuEntry.instantMix,
+          ContextMenuEntry.addToPlaylist,
+          ContextMenuEntry.playNext,
+          ContextMenuEntry.addToQueue,
+          ContextMenuEntry.download,
+          ContextMenuEntry.like,
+          ContextMenuEntry.goToArtist,
+          ContextMenuEntry.metadataLinks,
+          ContextMenuEntry.deleteFromServer,
         ],
       },
       ItemKind.artist: {
@@ -306,6 +326,7 @@ List<ContextMenuAction> contextMenuActions(
   LibraryItem item, {
   required ContextMenuScope scope,
   Future<void> Function(LibraryItem item)? onLike,
+  void Function(LibraryItem item)? onDeleted,
 }) {
   final isDesktop = DeviceType.fromScreenSize(
     MediaQuery.sizeOf(context),
@@ -318,7 +339,13 @@ List<ContextMenuAction> contextMenuActions(
       item.kind != ItemKind.playlist ||
       ref.read(serverCapabilitiesProvider).playlistFavourites &&
           !EphemeralPlaylistId.isEphemeral(item.id);
-  final actions = _ContextMenuActions(context, ref, item, scope);
+  final actions = _ContextMenuActions(
+    context,
+    ref,
+    item,
+    scope,
+    onDeleted: onDeleted,
+  );
 
   return [
     for (final entry in contextMenuEntries(item, scope))
@@ -339,9 +366,13 @@ List<ContextMenuAction> contextMenuActions(
         ContextMenuEntry.goToAlbum =>
           item.albumId != null ? actions.goToAlbum() : null,
         ContextMenuEntry.metadataLinks => actions.metadataLinks(),
+        ContextMenuEntry.deleteFromServer =>
+          canDeleteFromServer(ref, item) ? actions.deleteFromServer() : null,
         ContextMenuEntry.removeFromQueue ||
         ContextMenuEntry.removeFromPlaylist ||
-        ContextMenuEntry.deletePlaylist => null,
+        ContextMenuEntry.deletePlaylist ||
+        ContextMenuEntry.requestFromLidarr ||
+        ContextMenuEntry.selectSongs => null,
       },
   ].nonNulls.toList();
 }
@@ -595,12 +626,19 @@ class ContextMenuButton extends StatelessWidget {
 }
 
 class _ContextMenuActions {
-  const _ContextMenuActions(this.context, this.ref, this.item, this.scope);
+  const _ContextMenuActions(
+    this.context,
+    this.ref,
+    this.item,
+    this.scope, {
+    this.onDeleted,
+  });
 
   final BuildContext context;
   final WidgetRef ref;
   final LibraryItem item;
   final ContextMenuScope scope;
+  final void Function(LibraryItem item)? onDeleted;
 
   bool get _mounted => context.mounted;
 
@@ -677,9 +715,11 @@ class _ContextMenuActions {
         isDesktop: _isDesktop,
       );
       if (playlist == null || !_mounted) return;
-      await ref
-          .read(mediaServerClientProvider)
-          .addPlaylistItems(playlistId: playlist.id, itemIds: [item.id]);
+      final client = ref.read(mediaServerClientProvider);
+      final itemIds = item.kind == ItemKind.album
+          ? [for (final song in (await client.getSongs(item.id)).items) song.id]
+          : [item.id];
+      await client.addPlaylistItems(playlistId: playlist.id, itemIds: itemIds);
       ref.read(downloadSyncProvider).syncPlaylist(playlist.id);
       _showSnackBar('Successfully added to playlist');
     },
@@ -852,6 +892,20 @@ class _ContextMenuActions {
       },
     );
   }
+
+  ContextMenuAction deleteFromServer() => ContextMenuAction(
+    entry: ContextMenuEntry.deleteFromServer,
+    icon: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent),
+    label: const Text(
+      'Delete from server',
+      style: TextStyle(color: Colors.redAccent),
+    ),
+    run: () async {
+      if (!_mounted) return;
+      final deleted = await confirmAndDeleteFromServer(context, ref, [item]);
+      if (deleted.isNotEmpty) onDeleted?.call(item);
+    },
+  );
 
   ContextMenuAction goToArtist() => ContextMenuAction(
     entry: ContextMenuEntry.goToArtist,

@@ -44,29 +44,31 @@ class _DesktopAlbumPageState extends ConsumerState<DesktopAlbumPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GradientBackground(
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              navBar(),
-              Expanded(
-                child: CustomScrollbar(
-                  controller: scrollController,
-                  child: CustomScrollView(
+      body: selectionHost(
+        GradientBackground(
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                navBar(),
+                Expanded(
+                  child: CustomScrollbar(
                     controller: scrollController,
-                    slivers: [
-                      if (device.isDesktop)
-                        _headerSliver()
-                      else
-                        ..._tabletHeaderSlivers(),
-                      ...contentSlivers(),
-                    ],
+                    child: CustomScrollView(
+                      controller: scrollController,
+                      slivers: [
+                        if (device.isDesktop)
+                          _headerSliver()
+                        else
+                          ..._tabletHeaderSlivers(),
+                        ...contentSlivers(),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -139,7 +141,11 @@ class _DesktopAlbumPageState extends ConsumerState<DesktopAlbumPage>
         const SizedBox(width: 35),
         Row(
           mainAxisSize: MainAxisSize.min,
-          children: [downloadAlbumButton(), likeAlbumButton()],
+          children: [
+            downloadAlbumButton(),
+            likeAlbumButton(),
+            albumMenuButton(),
+          ],
         ),
       ],
     ),
@@ -179,6 +185,7 @@ class _DesktopAlbumPageState extends ConsumerState<DesktopAlbumPage>
               children: [
                 downloadAlbumButton(),
                 likeAlbumButton(),
+                albumMenuButton(),
                 SizedBox.square(dimension: 48, child: playAlbumButton()),
               ],
             ),

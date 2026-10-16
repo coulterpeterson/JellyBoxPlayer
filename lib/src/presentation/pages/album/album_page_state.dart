@@ -248,6 +248,7 @@ mixin AlbumPageState<T extends ConsumerStatefulWidget> on ConsumerState<T> {
                   song,
                   scope: ContextMenuScope.albumPage,
                   onLike: _onSongLikePressed,
+                  onDeleted: _onSongDeleted,
                 ),
               );
             },
@@ -427,6 +428,40 @@ mixin AlbumPageState<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       return;
     }
     ref.invalidate(favouriteAlbumsProvider);
+  }
+
+  Widget albumMenuButton() => ContextMenuButton(
+    icon: Icons.more_horiz,
+    actionsBuilder: (context) => contextMenuActions(
+      context,
+      ref,
+      album.copyWith(
+        userData: album.userData.copyWith(isFavorite: isFavorite),
+      ),
+      scope: ContextMenuScope.albumPage,
+      onLike: (_) => _onLikeAlbumPressed(),
+      onDeleted: (_) {
+        if (mounted) Navigator.of(this.context).maybePop();
+      },
+    ),
+  );
+
+  Widget selectionHost(Widget child) => SongSelectionHost(
+    songs: () => songs,
+    onDeleted: (deleted) {
+      if (!mounted) return;
+      final ids = {for (final song in deleted) song.id};
+      setState(
+        () => songs = [...songs]..removeWhere((s) => ids.contains(s.id)),
+      );
+    },
+    onChanged: () => unawaited(_getSongs()),
+    child: child,
+  );
+
+  void _onSongDeleted(LibraryItem song) {
+    if (!mounted) return;
+    setState(() => songs = [...songs]..removeWhere((s) => s.id == song.id));
   }
 
   Widget downloadAlbumButton() => CollectionDownloadButton(

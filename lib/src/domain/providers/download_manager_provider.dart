@@ -42,23 +42,29 @@ class DownloadManager {
 
   Future<void> downloadSong(LibraryItem song) =>
       _attempt('downloadSong', () async {
-        final client = _client();
-        final file = await _downloadSongFile(song, client);
-        if (file == null) return;
-        await _database.insertDownloadedSong(song, file: file);
-        final albumId = song.albumId;
-        if (albumId != null) {
-          await _service.downloadAlbumCover(
-            albumId,
-            client.imageUri(song, kind: ImageKind.album),
-          );
+        _activity.setPending(song);
+        try {
+          final client = _client();
+          final file = await _downloadSongFile(song, client);
+          if (file == null) return;
+          await _database.insertDownloadedSong(song, file: file);
+          final albumId = song.albumId;
+          if (albumId != null) {
+            await _service.downloadAlbumCover(
+              albumId,
+              client.imageUri(song, kind: ImageKind.album),
+            );
+          }
+          _revision.bump();
+        } finally {
+          _activity.clearPending(song.id);
         }
-        _revision.bump();
       });
 
   Future<void> downloadAlbum(LibraryItem album, List<LibraryItem> songs) =>
       _attempt('downloadAlbum', () async {
         final client = _client();
+        _activity.setPending(album);
         await _downloadCollection(album.id, songs, (stored) async {
           if (stored.isEmpty) return;
           await _database.insertDownloadedAlbum(
@@ -72,7 +78,10 @@ class DownloadManager {
   Future<void> downloadPlaylist(
     LibraryItem playlist,
     List<LibraryItem> songs,
-  ) => _attempt('downloadPlaylist', () => _storePlaylist(playlist, songs));
+  ) => _attempt('downloadPlaylist', () {
+    _activity.setPending(playlist);
+    return _storePlaylist(playlist, songs);
+  });
 
   Future<bool> syncPlaylist(
     LibraryItem playlist,
@@ -194,7 +203,9 @@ class DownloadManager {
       _active.remove(id);
       _cancelled.remove(id);
       _currentSong.remove(id);
-      _activity.setCollectionProgress(id, null);
+      _activity
+        ..setCollectionProgress(id, null)
+        ..clearPending(id);
     }
   }
 

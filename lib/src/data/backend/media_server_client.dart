@@ -99,6 +99,12 @@ abstract class MediaServerClient {
 
   Future<Lyrics?> getLyrics(String itemId);
 
+  /// Permanently deletes [itemId] (and its files) from the server.
+  Future<void> deleteItem(String itemId);
+
+  /// Asks the server to rescan its libraries so new files show up.
+  Future<void> refreshLibrary();
+
   Future<StreamSource> resolveStreamSource(
     LibraryItem song, {
     required String playSessionId,

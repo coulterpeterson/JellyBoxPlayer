@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jplayer/src/core/lyrics/lrclib_client.dart';
 import 'package:jplayer/src/data/backend/mappers/lyrics_dto_mapper.dart';
 import 'package:jplayer/src/data/backend/media_server_capabilities.dart';
 import 'package:jplayer/src/data/backend/media_server_client.dart';
@@ -16,6 +17,8 @@ import 'package:mocktail/mocktail.dart';
 import '../../provider_container.dart';
 
 class MockMediaServerClient extends Mock implements MediaServerClient {}
+
+class MockLrclibClient extends Mock implements LrclibClient {}
 
 class FakePlaybackNotifier extends StateNotifier<PlaybackState>
     with Mock
@@ -39,6 +42,9 @@ PlaybackState _playing(List<LibraryItem> songs, int index) => PlaybackState(
 
 void main() {
   late MockMediaServerClient mockClient;
+  late MockLrclibClient mockLrclib;
+
+  setUpAll(() => registerFallbackValue(_song('fallback', hasLyrics: false)));
 
   final lyrics = LyricsDTO.fromJson({
     'Metadata': {'IsSynced': true},
@@ -52,6 +58,7 @@ void main() {
       createProviderContainer(
         overrides: [
           mediaServerClientProvider.overrideWithValue(mockClient),
+          lrclibClientProvider.overrideWithValue(mockLrclib),
           remoteRendererProvider.overrideWithValue(null),
           if (playback != null) playbackProvider.overrideWith((_) => playback),
         ],
@@ -59,6 +66,16 @@ void main() {
 
   setUp(() {
     mockClient = MockMediaServerClient();
+    mockLrclib = MockLrclibClient();
+    when(() => mockLrclib.lyricsFor(any())).thenAnswer((_) async => null);
+    when(
+      () => mockClient.getItem(any(), kind: ItemKind.song),
+    ).thenAnswer(
+      (invocation) async => _song(
+        invocation.positionalArguments.first as String,
+        hasLyrics: false,
+      ),
+    );
     when(
       () => mockClient.capabilities,
     ).thenReturn(const MediaServerCapabilities());
@@ -80,16 +97,41 @@ void main() {
       verify(() => mockClient.getLyrics('song-1')).called(1);
     });
 
-    test('- returns null when the backend reports no lyrics', () async {
+    test(
+      '- returns null when neither the server nor LRCLIB has lyrics',
+      () async {
+        when(
+          () => mockClient.getLyrics('song-1'),
+        ).thenAnswer((_) async => null);
+
+        await expectLater(
+          containerWith().read(lyricsProvider('song-1').future),
+          completion(isNull),
+        );
+        verify(() => mockLrclib.lyricsFor(any())).called(1);
+      },
+    );
+
+    test('- falls back to LRCLIB when the server has no lyrics', () async {
       when(() => mockClient.getLyrics('song-1')).thenAnswer((_) async => null);
+      when(() => mockLrclib.lyricsFor(any())).thenAnswer((_) async => lyrics);
 
       await expectLater(
         containerWith().read(lyricsProvider('song-1').future),
-        completion(isNull),
+        completion(lyrics),
       );
     });
 
-    test('- asks for nothing when the backend has no lyrics support', () async {
+    test('- does not ask LRCLIB when the server has lyrics', () async {
+      when(
+        () => mockClient.getLyrics('song-1'),
+      ).thenAnswer((_) async => lyrics);
+
+      await containerWith().read(lyricsProvider('song-1').future);
+      verifyNever(() => mockLrclib.lyricsFor(any()));
+    });
+
+    test('- skips the server when it has no lyrics support', () async {
       when(
         () => mockClient.capabilities,
       ).thenReturn(const MediaServerCapabilities(lyrics: false));
@@ -101,14 +143,15 @@ void main() {
       verifyNever(() => mockClient.getLyrics(any()));
     });
 
-    test('- surfaces a backend failure', () async {
+    test('- falls back to LRCLIB when the server fails', () async {
       when(() => mockClient.getLyrics('song-1')).thenThrow(
         const MediaServerException(MediaServerErrorKind.server),
       );
+      when(() => mockLrclib.lyricsFor(any())).thenAnswer((_) async => lyrics);
 
       await expectLater(
         containerWith().read(lyricsProvider('song-1').future),
-        throwsA(isA<MediaServerException>()),
+        completion(lyrics),
       );
     });
   });

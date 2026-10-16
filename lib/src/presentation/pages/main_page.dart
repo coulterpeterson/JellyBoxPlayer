@@ -9,6 +9,7 @@ import 'package:in_app_review/in_app_review.dart';
 import 'package:jplayer/resources/j_player_icons.dart';
 import 'package:jplayer/src/config/constants.dart';
 import 'package:jplayer/src/domain/providers/providers.dart';
+import 'package:jplayer/src/presentation/ipod/ipod_shell.dart';
 import 'package:jplayer/src/presentation/themes/themes.dart';
 import 'package:jplayer/src/presentation/utils/utils.dart';
 import 'package:jplayer/src/presentation/widgets/widgets.dart';
@@ -122,9 +123,15 @@ class _MainPageState extends ConsumerState<MainPage> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<bool>(reviewPromptProvider, (_, due) {
-      if (due) unawaited(_requestReview());
-    });
+    ref
+      ..listen<bool>(reviewPromptProvider, (_, due) {
+        if (due) unawaited(_requestReview());
+      })
+      // Keeps Lidarr requests moving while the app is open.
+      ..listen(lidarrRequestsProvider, (_, _) {});
+    if (ref.watch(settingProvider(AppSetting.ipodMode))) {
+      return const IpodShell();
+    }
     final currentIndex = widget.shell.currentIndex;
     final isOffline = ref.watch(isOfflineProvider);
     final pluginNotice = ref.watch(visiblePluginNoticeProvider);

@@ -12,6 +12,7 @@ import 'package:jplayer/src/presentation/widgets/album_view.dart';
 import 'package:jplayer/src/presentation/widgets/clickable_widget.dart';
 import 'package:jplayer/src/presentation/widgets/cover_mosaic.dart';
 import 'package:jplayer/src/presentation/widgets/horizontal_scroll_region.dart';
+import 'package:jplayer/src/presentation/widgets/lidarr_search_section.dart';
 import 'package:jplayer/src/presentation/widgets/offline_notice.dart';
 import 'package:jplayer/src/presentation/widgets/search_songs_sliver.dart';
 import 'package:jplayer/src/presentation/widgets/shimmer.dart';
@@ -40,6 +41,7 @@ class SearchResultsSliver extends ConsumerWidget {
       for (final category in searchCategories)
         category: ref.watch(searchItemsProvider(category)),
     };
+    final lidarrSlivers = lidarrSearchSlivers(context, ref, device);
     final soundMatches = ref.watch(soundSearchProvider);
     final soundItems = soundMatches.valueOrNull ?? const <LibraryItem>[];
     final hasItems =
@@ -55,6 +57,9 @@ class SearchResultsSliver extends ConsumerWidget {
           sections.values.any((section) => section.isLoading);
       if (isSearching) {
         return SliverToBoxAdapter(child: SectionsShimmer(device: device));
+      }
+      if (lidarrSlivers.isNotEmpty) {
+        return SliverMainAxisGroup(slivers: lidarrSlivers);
       }
 
       final hasError = sections.values.any((section) => section.hasError);
@@ -85,6 +90,7 @@ class SearchResultsSliver extends ConsumerWidget {
             category: entry.key,
             items: entry.value.valueOrNull?.items ?? const [],
           ),
+        ...lidarrSlivers,
       ],
     );
   }

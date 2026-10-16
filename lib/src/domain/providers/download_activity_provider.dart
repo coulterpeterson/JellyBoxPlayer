@@ -6,17 +6,24 @@ class DownloadActivity {
   const DownloadActivity({
     this.collections = const {},
     this.songs = const {},
+    this.pending = const {},
   });
 
   final Map<String, double> collections;
   final Map<String, DownloadTask> songs;
 
+  /// Albums, playlists and songs the user asked to download that haven't
+  /// finished yet, in the order they were requested.
+  final Map<String, LibraryItem> pending;
+
   DownloadActivity copyWith({
     Map<String, double>? collections,
     Map<String, DownloadTask>? songs,
+    Map<String, LibraryItem>? pending,
   }) => DownloadActivity(
     collections: collections ?? this.collections,
     songs: songs ?? this.songs,
+    pending: pending ?? this.pending,
   );
 }
 
@@ -36,6 +43,15 @@ class DownloadActivityNotifier extends Notifier<DownloadActivity> {
           ? ({...state.collections}..remove(id))
           : {...state.collections, id: progress},
     );
+  }
+
+  void setPending(LibraryItem item) {
+    state = state.copyWith(pending: {...state.pending, item.id: item});
+  }
+
+  void clearPending(String id) {
+    if (!state.pending.containsKey(id)) return;
+    state = state.copyWith(pending: {...state.pending}..remove(id));
   }
 
   void trackSong(DownloadTask task) {
@@ -74,3 +90,10 @@ final ProviderFamily<DownloadTask?, String> songDownloadTaskProvider =
         downloadActivityProvider.select((activity) => activity.songs[id]),
       ),
     );
+
+final pendingDownloadsProvider = Provider<List<LibraryItem>>(
+  (ref) => ref
+      .watch(downloadActivityProvider.select((activity) => activity.pending))
+      .values
+      .toList(),
+);

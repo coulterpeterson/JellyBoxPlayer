@@ -119,13 +119,15 @@ class _MobileAlbumPageState extends ConsumerState<MobileAlbumPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: GradientBackground(
-        child: Opacity(
-          opacity: _panelMeasured ? 1 : 0,
-          child: TweenAnimationBuilder<Color?>(
-            tween: ColorTween(end: _coverTint() ?? Colors.transparent),
-            duration: const Duration(milliseconds: 600),
-            builder: (context, tint, child) => _tinted(tint!),
+      body: selectionHost(
+        GradientBackground(
+          child: Opacity(
+            opacity: _panelMeasured ? 1 : 0,
+            child: TweenAnimationBuilder<Color?>(
+              tween: ColorTween(end: _coverTint() ?? Colors.transparent),
+              duration: const Duration(milliseconds: 600),
+              builder: (context, tint, child) => _tinted(tint!),
+            ),
           ),
         ),
       ),
@@ -268,6 +270,7 @@ class _MobileAlbumPageState extends ConsumerState<MobileAlbumPage>
               children: [
                 downloadAlbumButton(),
                 likeAlbumButton(),
+                albumMenuButton(),
                 SizedBox.square(dimension: 38, child: playAlbumButton()),
               ],
             ),

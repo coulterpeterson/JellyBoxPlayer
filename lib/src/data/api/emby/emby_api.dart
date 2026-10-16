@@ -171,6 +171,7 @@ abstract class EmbyApi {
   Future<HttpResponse<ItemsWrapper>> getPlaylists({
     @Path('userId') required String userId,
     @Query('IncludeItemTypes') String type = 'Playlist',
+    @Query('MediaTypes') String mediaTypes = 'Audio',
     @Query('StartIndex') String startIndex = '0',
     @Query('Limit') String limit = '100',
     @Query('SortBy') String sortBy = 'DateCreated,SortName',
@@ -188,6 +189,7 @@ abstract class EmbyApi {
     @Query('ParentId') required String libraryId,
     @Query('SearchTerm') required String searchTerm,
     @Query('IncludeItemTypes') String type = 'Playlist',
+    @Query('MediaTypes') String mediaTypes = 'Audio',
     @Query('StartIndex') String startIndex = '0',
     @Query('Limit') String limit = '100',
     @Query('SortOrder') String sortOrder = 'Descending',

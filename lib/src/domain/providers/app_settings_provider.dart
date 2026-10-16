@@ -43,6 +43,10 @@ enum AppSetting {
   rendererVolumes('renderer_volumes', defaultValue: <String, double>{}),
   listenBrainzUser('listenbrainz_user', defaultValue: ''),
   listenBrainzApiUrl('listenbrainz_api_url', defaultValue: ''),
+  lidarrUrl('lidarr_url', defaultValue: '', syncs: false),
+  ipodMode('ipod_mode', syncs: false),
+  ipodHaptics('ipod_haptics', defaultValue: true, syncs: false),
+  ipodBlack('ipod_black', syncs: false),
   telemetryOptOut('telemetry_opt_out');
 
   const AppSetting(this.key, {this.defaultValue = false, this.syncs = true});

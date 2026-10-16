@@ -791,6 +791,7 @@ class _JellyfinApi implements JellyfinApi {
   Future<HttpResponse<ItemsWrapper>> getPlaylists({
     required String userId,
     String type = 'Playlist',
+    String mediaTypes = 'Audio',
     String startIndex = '0',
     String limit = '100',
     String sortBy = 'DateCreated,SortName',
@@ -804,6 +805,7 @@ class _JellyfinApi implements JellyfinApi {
     final _extra = <String, dynamic>{};
     final queryParameters = <String, dynamic>{
       r'IncludeItemTypes': type,
+      r'MediaTypes': mediaTypes,
       r'StartIndex': startIndex,
       r'Limit': limit,
       r'SortBy': sortBy,
@@ -845,6 +847,7 @@ class _JellyfinApi implements JellyfinApi {
     required String libraryId,
     required String searchTerm,
     String type = 'Playlist',
+    String mediaTypes = 'Audio',
     String startIndex = '0',
     String limit = '100',
     String sortOrder = 'Descending',
@@ -855,6 +858,7 @@ class _JellyfinApi implements JellyfinApi {
       r'ParentId': libraryId,
       r'searchTerm': searchTerm,
       r'IncludeItemTypes': type,
+      r'MediaTypes': mediaTypes,
       r'StartIndex': startIndex,
       r'Limit': limit,
       r'SortOrder': sortOrder,
