@@ -26,6 +26,7 @@ enum AppSetting {
   playerTimeDisplay('player_time_display', defaultValue: 'remaining'),
   forwardCacheLimit('forward_cache_limit', defaultValue: 'off'),
   forwardCacheWindow('forward_cache_window', defaultValue: 'min30'),
+  crossfade('crossfade', defaultValue: 'off'),
   streamQualityWifi(
     'stream_quality_wifi',
     defaultValue: 'original',
@@ -112,6 +113,15 @@ final forwardCacheWindowProvider = Provider<ForwardCacheWindow>(
         AppSetting.forwardCacheWindow,
       )] ??
       ForwardCacheWindow.min30,
+);
+
+final crossfadeProvider = Provider<Crossfade>(
+  (ref) =>
+      Crossfade.values.asNameMap()[_asString(
+        ref.watch(appSettingsProvider)[AppSetting.crossfade],
+        AppSetting.crossfade,
+      )] ??
+      Crossfade.off,
 );
 
 final streamQualityWifiProvider = Provider<StreamQuality>(

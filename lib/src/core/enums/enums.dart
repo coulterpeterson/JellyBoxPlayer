@@ -14,3 +14,4 @@ export 'playback_status.dart';
 export 'player_time_display.dart';
 export 'start_page.dart';
 export 'stream_quality.dart';
+export 'crossfade.dart';

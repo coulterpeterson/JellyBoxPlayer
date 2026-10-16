@@ -1,7 +1,9 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:jplayer/src/core/enums/enums.dart';
 import 'package:jplayer/src/domain/playback/local_playback_target.dart';
+import 'package:jplayer/src/domain/providers/app_settings_provider.dart';
 import 'package:jplayer/src/domain/playback/playback_target.dart';
 import 'package:jplayer/src/providers/connectivity_provider.dart';
 import 'package:jplayer/src/providers/player_provider.dart';
@@ -16,7 +18,13 @@ final localPlaybackTargetProvider = Provider<PlaybackTarget>((ref) {
     onlineChanges: () => ref.read(connectivityProvider.notifier).stream,
     recheckConnection: () => ref.read(connectivityProvider.notifier).refresh(),
   );
-  ref.onDispose(target.dispose);
+  ref
+    ..listen<Crossfade>(
+      crossfadeProvider,
+      (_, value) => target.crossfade = value.duration,
+      fireImmediately: true,
+    )
+    ..onDispose(target.dispose);
   return target;
 });
 

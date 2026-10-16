@@ -75,6 +75,15 @@ class SettingsPage extends ConsumerWidget {
     StreamQuality.kbps64: '64 kbps',
   };
 
+  static const Map<Crossfade, String> _crossfadeLabels = {
+    Crossfade.off: 'Off',
+    Crossfade.s2: '2 seconds',
+    Crossfade.s4: '4 seconds',
+    Crossfade.s6: '6 seconds',
+    Crossfade.s8: '8 seconds',
+    Crossfade.s12: '12 seconds',
+  };
+
   static const Map<ContentUpdateInterval, String> _contentUpdateLabels = {
     ContentUpdateInterval.min1: '1 minute',
     ContentUpdateInterval.min5: '5 minutes',
@@ -176,10 +185,125 @@ class SettingsPage extends ConsumerWidget {
                       _sectionHeader('Jellybox Cloud'),
                       const JellyboxCloudSettings(),
                     ],
-                    _sectionHeader('General'),
-                    if (kDebugMode) _settingsButton(context),
-                    if (kDebugMode) _queueCacheButton(context),
-                    _changelogButton(context, device),
+                    _sectionHeader('Playback'),
+                    _settingDropdown<Crossfade>(
+                      context: context,
+                      label: 'Crossfade',
+                      value: ref.watch(crossfadeProvider),
+                      options: _crossfadeLabels,
+                      onChanged: (value) => ref
+                          .read(appSettingsProvider.notifier)
+                          .setValue(AppSetting.crossfade, value.name),
+                    ),
+                    _settingNote(
+                      context,
+                      'Fades the end of each song out and the next one in. '
+                      "Songs play one at a time, so they don't overlap.",
+                    ),
+                    _settingDropdown<StreamQuality>(
+                      context: context,
+                      label: deviceHasCellular ? 'Wi-Fi' : 'Streaming quality',
+                      value: ref.watch(streamQualityWifiProvider),
+                      options: _streamQualityLabels,
+                      onChanged: (value) => ref
+                          .read(appSettingsProvider.notifier)
+                          .setValue(AppSetting.streamQualityWifi, value.name),
+                    ),
+                    if (deviceHasCellular)
+                      _settingDropdown<StreamQuality>(
+                        context: context,
+                        label: 'Cellular',
+                        value: ref.watch(streamQualityCellularProvider),
+                        options: _streamQualityLabels,
+                        onChanged: (value) => ref
+                            .read(appSettingsProvider.notifier)
+                            .setValue(
+                              AppSetting.streamQualityCellular,
+                              value.name,
+                            ),
+                      ),
+                    _settingNote(
+                      context,
+                      'Songs above the limit are converted by your server. '
+                      'Changes apply from the next song. Downloads always '
+                      'keep the original quality.',
+                    ),
+                    _sectionHeader('Appearance'),
+                    _settingDropdown<StartPage>(
+                      context: context,
+                      label: 'Default start page',
+                      value: ref.watch(defaultStartPageProvider),
+                      options: _startPageLabels,
+                      onChanged: (value) => ref
+                          .read(appSettingsProvider.notifier)
+                          .setValue(AppSetting.defaultStartPage, value.name),
+                    ),
+                    _settingDropdown<ItemList>(
+                      context: context,
+                      label: 'Default browse tab',
+                      value: ref.watch(defaultBrowseTabProvider),
+                      options: _browseTabLabels,
+                      onChanged: (value) => ref
+                          .read(appSettingsProvider.notifier)
+                          .setValue(AppSetting.defaultBrowseTab, value.name),
+                    ),
+                    _settingCheckbox(
+                      ref: ref,
+                      setting: AppSetting.letterRuler,
+                      label: 'Show A–Z index on browse lists sorted by name',
+                    ),
+                    _settingCheckbox(
+                      ref: ref,
+                      setting: AppSetting.artworkAccent,
+                      label: 'Match button colours to the current track',
+                    ),
+                    _settingCheckbox(
+                      ref: ref,
+                      setting: AppSetting.nowPlayingHalo,
+                      label: 'Enable halo effect for currently playing media',
+                    ),
+                    if (device.isMobile) ...[
+                      _settingCheckbox(
+                        ref: ref,
+                        setting: AppSetting.albumArtTint,
+                        label: 'Tint album pages with cover art colours',
+                      ),
+                      _settingCheckbox(
+                        ref: ref,
+                        setting: AppSetting.animatedCovers,
+                        label: 'Animated album covers',
+                      ),
+                      _settingNote(
+                        context,
+                        'Looks up for animated covers and plays them on '
+                        'Wi-Fi only.',
+                      ),
+                    ],
+                    if (!device.isMobile) ...[
+                      _settingDropdown<AnimationSpeed>(
+                        context: context,
+                        label: 'Animation speed',
+                        value: ref.watch(animationSpeedProvider),
+                        options: _animationSpeedLabels,
+                        onChanged: (value) => ref
+                            .read(appSettingsProvider.notifier)
+                            .setValue(AppSetting.animationSpeed, value.name),
+                      ),
+                      _settingNote(
+                        context,
+                        'Affects Studio Mode and Landscape Mode.',
+                      ),
+                    ],
+                    _settingCheckbox(
+                      ref: ref,
+                      setting: AppSetting.ipodMode,
+                      label: 'iPod mode',
+                    ),
+                    _settingNote(
+                      context,
+                      'Turns the app into an iPod classic with a click wheel '
+                      'and games. Leave it from the iPod Settings menu.',
+                    ),
                     _sectionHeader('Home Page'),
                     _settingCheckbox(
                       ref: ref,
@@ -219,113 +343,8 @@ class SettingsPage extends ConsumerWidget {
                       'How often the home page refreshes and downloaded '
                       'playlists check your server for changes.',
                     ),
-                    _sectionHeader('UI'),
-                    _settingDropdown<StartPage>(
-                      context: context,
-                      label: 'Default start page',
-                      value: ref.watch(defaultStartPageProvider),
-                      options: _startPageLabels,
-                      onChanged: (value) => ref
-                          .read(appSettingsProvider.notifier)
-                          .setValue(AppSetting.defaultStartPage, value.name),
-                    ),
-                    if (!device.isMobile) ...[
-                      _settingDropdown<AnimationSpeed>(
-                        context: context,
-                        label: 'Animation speed',
-                        value: ref.watch(animationSpeedProvider),
-                        options: _animationSpeedLabels,
-                        onChanged: (value) => ref
-                            .read(appSettingsProvider.notifier)
-                            .setValue(AppSetting.animationSpeed, value.name),
-                      ),
-                      _settingNote(
-                        context,
-                        'Affects Studio Mode and Landscape Mode.',
-                      ),
-                    ],
-                    _settingDropdown<ItemList>(
-                      context: context,
-                      label: 'Default browse tab',
-                      value: ref.watch(defaultBrowseTabProvider),
-                      options: _browseTabLabels,
-                      onChanged: (value) => ref
-                          .read(appSettingsProvider.notifier)
-                          .setValue(AppSetting.defaultBrowseTab, value.name),
-                    ),
-                    _settingCheckbox(
-                      ref: ref,
-                      setting: AppSetting.ipodMode,
-                      label: 'iPod mode',
-                    ),
-                    _settingNote(
-                      context,
-                      'Turns the app into an iPod classic with a click wheel '
-                      'and games. Leave it from the iPod Settings menu.',
-                    ),
-                    _settingCheckbox(
-                      ref: ref,
-                      setting: AppSetting.letterRuler,
-                      label: 'Show A–Z index on browse lists sorted by name',
-                    ),
-                    _settingCheckbox(
-                      ref: ref,
-                      setting: AppSetting.artworkAccent,
-                      label: 'Match button colours to the current track',
-                    ),
-                    _settingCheckbox(
-                      ref: ref,
-                      setting: AppSetting.nowPlayingHalo,
-                      label: 'Enable halo effect for currently playing media',
-                    ),
-                    if (device.isMobile) ...[
-                      _settingCheckbox(
-                        ref: ref,
-                        setting: AppSetting.albumArtTint,
-                        label: 'Tint album pages with cover art colours',
-                      ),
-                      _settingCheckbox(
-                        ref: ref,
-                        setting: AppSetting.animatedCovers,
-                        label: 'Animated album covers',
-                      ),
-                      _settingNote(
-                        context,
-                        'Looks up for animated covers and plays them on '
-                        'Wi-Fi only.',
-                      ),
-                    ],
-                    _sectionHeader('Streaming'),
-                    _settingDropdown<StreamQuality>(
-                      context: context,
-                      label: deviceHasCellular ? 'Wi-Fi' : 'Streaming quality',
-                      value: ref.watch(streamQualityWifiProvider),
-                      options: _streamQualityLabels,
-                      onChanged: (value) => ref
-                          .read(appSettingsProvider.notifier)
-                          .setValue(AppSetting.streamQualityWifi, value.name),
-                    ),
-                    if (deviceHasCellular)
-                      _settingDropdown<StreamQuality>(
-                        context: context,
-                        label: 'Cellular',
-                        value: ref.watch(streamQualityCellularProvider),
-                        options: _streamQualityLabels,
-                        onChanged: (value) => ref
-                            .read(appSettingsProvider.notifier)
-                            .setValue(
-                              AppSetting.streamQualityCellular,
-                              value.name,
-                            ),
-                      ),
-                    _settingNote(
-                      context,
-                      'Songs above the limit are converted by your server. '
-                      'Changes apply from the next song. Downloads always '
-                      'keep the original quality.',
-                    ),
+                    _sectionHeader('Downloads & storage'),
                     if (deviceHasCellular) ...[
-                      _sectionHeader('Downloads'),
                       _settingCheckbox(
                         ref: ref,
                         setting: AppSetting.downloadSyncOnCellular,
@@ -338,7 +357,6 @@ class SettingsPage extends ConsumerWidget {
                         'Otherwise this only happens on Wi-Fi.',
                       ),
                     ],
-                    _sectionHeader('Cache'),
                     _settingDropdown<ForwardCacheLimit>(
                       context: context,
                       label: 'Cache limit',
@@ -398,17 +416,8 @@ class SettingsPage extends ConsumerWidget {
                               'Make player full screen when Studio Mode enabled',
                         ),
                     ],
-                    if (supportsDiscordPresence) ...[
-                      _sectionHeader('Discord'),
-                      _settingCheckbox(
-                        ref: ref,
-                        setting: AppSetting.discordRichPresence,
-                        label: 'Share what I am listening to on Discord',
-                      ),
-                    ],
-                    _sectionHeader('ListenBrainz'),
-                    const ListenBrainzSettings(),
-                    _sectionHeader('Lidarr'),
+                    _sectionHeader('Connected services'),
+                    _subheader('Lidarr'),
                     const LidarrSettings(),
                     _settingNote(
                       context,
@@ -416,6 +425,16 @@ class SettingsPage extends ConsumerWidget {
                       'your server. Requests keep going while the app is '
                       'open; progress shows on the Downloads page.',
                     ),
+                    _subheader('ListenBrainz'),
+                    const ListenBrainzSettings(),
+                    if (supportsDiscordPresence) ...[
+                      _subheader('Discord'),
+                      _settingCheckbox(
+                        ref: ref,
+                        setting: AppSetting.discordRichPresence,
+                        label: 'Share what I am listening to on Discord',
+                      ),
+                    ],
                     _sectionHeader('Privacy'),
                     _settingCheckbox(
                       ref: ref,
@@ -428,6 +447,10 @@ class SettingsPage extends ConsumerWidget {
                       'help fix bugs. Nothing about your library or listening '
                       'is collected.',
                     ),
+                    _sectionHeader('About'),
+                    _changelogButton(context, device),
+                    if (kDebugMode) _settingsButton(context),
+                    if (kDebugMode) _queueCacheButton(context),
                     if (!device.isDesktop) _logOutButton(ref),
                     _versionLabel(context),
                   ],
@@ -572,6 +595,14 @@ class SettingsPage extends ConsumerWidget {
         fontWeight: FontWeight.w600,
         height: 1.2,
       ),
+    ),
+  );
+
+  Widget _subheader(String title) => Padding(
+    padding: const EdgeInsets.only(left: 12, top: 10, bottom: 2),
+    child: Text(
+      title,
+      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
     ),
   );
 

@@ -264,6 +264,7 @@ class _SongSelectionHostState extends ConsumerState<SongSelectionHost> {
           if (!didPop) _controller.end();
         },
         child: Stack(
+          fit: StackFit.passthrough,
           children: [
             child!,
             Positioned(

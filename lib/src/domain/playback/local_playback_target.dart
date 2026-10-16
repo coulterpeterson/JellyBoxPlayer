@@ -38,8 +38,15 @@ class LocalPlaybackTarget implements PlaybackTarget, SwappableQueue {
        _loadTimeout = loadTimeout,
        _stopTimeout = stopTimeout {
     _subscriptions = [
-      _player.currentIndexStream.listen((_) => _emit()),
-      _player.positionStream.listen((_) => _emit()),
+      _player.currentIndexStream.listen((_) {
+        // A song that was fading out ended on its own: fade the next one in.
+        _fadingIn = _fade < 1;
+        _emit();
+      }),
+      _player.positionStream.listen((position) {
+        _applyFade(position);
+        _emit();
+      }),
       _player.durationStream.listen((_) => _emit()),
       _player.playerStateStream.listen((playerState) {
         _scheduleIdleStop(playerState);
@@ -562,13 +569,52 @@ class LocalPlaybackTarget implements PlaybackTarget, SwappableQueue {
     _restart();
   }
 
+  /// Fade length between songs; zero turns it off. A single player can't
+  /// overlap two songs, so the end of one fades out and the next fades in.
+  Duration crossfade = Duration.zero;
+  double _baseVolume = 1;
+  double _fade = 1;
+  var _fadingIn = false;
+
   @override
   Future<void> setVolume(double level) async {
+    _baseVolume = level;
+    await _writeVolume();
+  }
+
+  Future<void> _writeVolume() async {
     try {
-      await _player.setVolume(level);
+      await _player.setVolume(_baseVolume * _fade);
     } on MissingPluginException {
       debugPrint('[LocalTarget] volume noted; player is between sessions');
     }
+  }
+
+  void _applyFade(Duration position) {
+    final window = crossfade;
+    var fade = 1.0;
+    if (window > Duration.zero && _player.playing) {
+      final duration = _player.duration;
+      final remaining = duration == null ? null : duration - position;
+      final hasNext = _player.hasNext || _player.loopMode == LoopMode.all;
+      if (_fadingIn && position < window) {
+        fade = position.inMilliseconds / window.inMilliseconds;
+      } else {
+        _fadingIn = false;
+        if (hasNext &&
+            _player.loopMode != LoopMode.one &&
+            remaining != null &&
+            remaining < window) {
+          fade = remaining.inMilliseconds / window.inMilliseconds;
+        }
+      }
+    } else {
+      _fadingIn = false;
+    }
+    fade = fade.clamp(0.0, 1.0);
+    if ((fade - _fade).abs() < 0.02 && !(fade == 1 && _fade != 1)) return;
+    _fade = fade;
+    unawaited(_writeVolume());
   }
 
   @override
