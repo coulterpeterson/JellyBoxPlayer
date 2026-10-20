@@ -1,3 +1,73 @@
+# JellyBox — fork notes
+
+This fork of [JellyBox](https://github.com/avdept/JellyBoxPlayer) adds Lidarr integration, two retro player themes, and a set of library and playback improvements. The original JellyBox README follows the line below.
+
+## Lidarr integration
+
+Connect your own [Lidarr](https://lidarr.audio) under **Settings › Connected services › Lidarr** (address and API key; the key is stored in the keychain). Then search finds music you don't have yet:
+
+- **Get from Lidarr** search results with three rows:
+  - **Artists**, from Lidarr's search. Tap one to see their albums, EPs and singles.
+  - **Albums**, from Lidarr plus [MusicBrainz](https://musicbrainz.org), so soundtracks and Various Artists albums show up too.
+  - **Songs**, from [Deezer's](https://developers.deezer.com/api) public search. Tapping a song finds the albums containing it, preferring the original studio album over compilations and live releases, and opens it with the song ticked.
+- **Three actions for any album or picked songs:**
+  - **Add to library:** Lidarr downloads it to your server.
+  - **Download:** once it's on your server, it downloads to this device.
+  - **Add to playlist:** once it's on your server, it's added to a playlist.
+- **Single songs:** Lidarr can only download whole albums, so for picked songs the app requests the album, then deletes the other tracks once it's imported and unmonitors the album so they don't come back.
+- **Requests that look after themselves.** The app adds new artists with only the requested album monitored. It also:
+  - checks Lidarr's indexer results and grabs a usable release if Lidarr hasn't;
+  - switches to another edition (e.g. a deluxe edition) when that's all that's available;
+  - falls back to another album with the same song when nothing is found;
+  - makes sure the chosen edition actually contains the requested song;
+  - imports downloads that get stuck at "Waiting to Import" when Lidarr has matched the files;
+  - says why when it can't, e.g. no releases found, or Lidarr can't see the download folder.
+- **Downloads page:**
+  - **Downloading** shows dimmed album placeholders with a progress ring for downloads in progress.
+  - **Looking for** lists albums Lidarr is monitoring but has nothing for yet, with Search again, Choose songs and Stop looking.
+
+## Library and playback
+
+- **Delete from server:** delete songs or albums from the media server, with a confirmation. If Lidarr is connected, they're unmonitored there so they don't download again.
+- **Multi-select:** long-press a track to select several, then use the bulk actions: play next, add to queue, add to playlist, download, favourite, delete from server, or remove from playlist.
+- **Album screen ⋯ menu** with the same options as the album list.
+- **Lyrics fallback:** when the server has no lyrics, they come from [LRCLIB](https://lrclib.net), a free lyrics database that needs no account. Synced lyrics are used when available.
+- **Music-only playlists:** playlists that only hold TV episodes or movies are hidden, and so are non-song items inside mixed playlists. This also fixes an Emby quirk that listed favourite movies and single songs as playlists.
+- **Crossfade** (Settings › Playback): fades the end of each song out and the next in, from 2 to 12 seconds.
+- **Seek bar fix:** the countdown no longer reaches 0:00 before the song ends when the server's stored song length is too short.
+- **Settings reorganised** into Server, Playback, Appearance, Home Page, Downloads & storage, Connected services, Privacy and About.
+- **Scrollable menus:** long context menus scroll instead of running off the screen.
+
+## Retro themes
+
+**Settings › Appearance › Theme** turns the whole app into a classic music player, with a scroll wheel (a haptic click per step), nested menus, Now Playing and three games: Brick, Pong and Snake.
+
+- **Cupertino:** an iPod classic. Silver or black, with the click wheel, split-screen main menu with drifting cover art, and Now Playing with reflected album art. The wheel controls volume, or seeking after a centre press.
+- **Not Cupertino:** a SanDisk Sansa e200:
+  - glossy black body with a glowing blue scroll ring and arc buttons;
+  - an icon-wheel home screen that rotates with the dial;
+  - blue menus with a silver status bar;
+  - **Music Options** on the ≡ button: shuffle, repeat and scan through song;
+  - e200-style Now Playing that keeps the album art.
+
+The theme's own Settings menu switches between the two themes or exits.
+
+## Diagnostics and fixes
+
+- Logging for playlists and favourites, every Lidarr call (without the API key) and request progress, written to the on-device log.
+- Fixed desktop sign-in getting stuck when the macOS keychain refused a cleanup step.
+- Fixed the `native_route_picker` macOS plugin building on Xcode 26.
+
+## Building this fork
+
+This fork's iOS project is signed with its own team and bundle ID (`com.maplespace.jellybox`). To build it yourself, change the team and bundle ID in Xcode. CarPlay and local-network discovery entitlements are removed in this build because they need Apple approval for each team.
+
+<br>
+
+---
+
+<br>
+
 <div align="center">
 
 <img src="./docs/logo.png" width="120" alt="JellyBox logo">
