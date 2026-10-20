@@ -538,35 +538,63 @@ class _SansaStatusBarState extends ConsumerState<_SansaStatusBar> {
   }
 
   final _battery = Battery();
-  Timer? _timer;
+  Timer? _clockTimer;
+  Timer? _batteryTimer;
+  late final AppLifecycleListener _lifecycle;
   var _level = 100;
   var _now = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    unawaited(_read());
-    _timer = Timer.periodic(const Duration(seconds: 20), (_) => _read());
+    unawaited(_readBattery());
+    _batteryTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _readBattery(),
+    );
+    _scheduleClock(initial: true);
+    // Timers don't run in the background, so catch up on returning.
+    _lifecycle = AppLifecycleListener(onResume: _scheduleClock);
   }
 
-  Future<void> _read() async {
-    var level = _level;
+  /// Updates the time right as each minute starts, so it changes in step
+  /// with the phone's own clock.
+  void _scheduleClock({bool initial = false}) {
+    _clockTimer?.cancel();
+    if (!mounted) return;
+    final now = DateTime.now();
+    if (initial) {
+      _now = now;
+    } else {
+      setState(() => _now = now);
+    }
+    final nextMinute = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute + 1,
+    );
+    _clockTimer = Timer(
+      nextMinute.difference(now) + const Duration(milliseconds: 20),
+      _scheduleClock,
+    );
+  }
+
+  Future<void> _readBattery() async {
     try {
-      level = await _battery.batteryLevel;
+      final level = await _battery.batteryLevel;
+      if (mounted) setState(() => _level = level);
     } on Object {
       // Simulators and some devices don't report a level.
-    }
-    if (mounted) {
-      setState(() {
-        _level = level;
-        _now = DateTime.now();
-      });
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _clockTimer?.cancel();
+    _batteryTimer?.cancel();
+    _lifecycle.dispose();
     super.dispose();
   }
 
