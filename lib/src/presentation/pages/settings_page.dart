@@ -75,6 +75,12 @@ class SettingsPage extends ConsumerWidget {
     StreamQuality.kbps64: '64 kbps',
   };
 
+  static const Map<RetroTheme, String> _retroThemeLabels = {
+    RetroTheme.off: 'Standard',
+    RetroTheme.cupertino: 'Cupertino',
+    RetroTheme.sansa: 'Not Cupertino',
+  };
+
   static const Map<Crossfade, String> _crossfadeLabels = {
     Crossfade.off: 'Off',
     Crossfade.s2: '2 seconds',
@@ -294,15 +300,22 @@ class SettingsPage extends ConsumerWidget {
                         'Affects Studio Mode and Landscape Mode.',
                       ),
                     ],
-                    _settingCheckbox(
-                      ref: ref,
-                      setting: AppSetting.ipodMode,
-                      label: 'iPod mode',
+                    _settingDropdown<RetroTheme>(
+                      context: context,
+                      label: 'Theme',
+                      value: ref.watch(retroThemeProvider),
+                      options: _retroThemeLabels,
+                      onChanged: (value) {
+                        final settings = ref.read(appSettingsProvider.notifier);
+                        settings.setEnabled(AppSetting.ipodMode, value: false);
+                        settings.setValue(AppSetting.retroTheme, value.name);
+                      },
                     ),
                     _settingNote(
                       context,
-                      'Turns the app into an iPod classic with a click wheel '
-                      'and games. Leave it from the iPod Settings menu.',
+                      'Cupertino turns the app into an iPod classic and Not '
+                      'Cupertino into a Sansa e200, each with a scroll wheel '
+                      'and games. Leave from the player\'s Settings menu.',
                     ),
                     _sectionHeader('Home Page'),
                     _settingCheckbox(

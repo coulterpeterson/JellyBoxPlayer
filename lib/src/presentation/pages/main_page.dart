@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:jplayer/resources/j_player_icons.dart';
 import 'package:jplayer/src/config/constants.dart';
+import 'package:jplayer/src/core/enums/enums.dart';
 import 'package:jplayer/src/domain/providers/providers.dart';
 import 'package:jplayer/src/presentation/ipod/ipod_shell.dart';
 import 'package:jplayer/src/presentation/themes/themes.dart';
@@ -129,7 +130,7 @@ class _MainPageState extends ConsumerState<MainPage> {
       })
       // Keeps Lidarr requests moving while the app is open.
       ..listen(lidarrRequestsProvider, (_, _) {});
-    if (ref.watch(settingProvider(AppSetting.ipodMode))) {
+    if (ref.watch(retroThemeProvider) != RetroTheme.off) {
       return const IpodShell();
     }
     final currentIndex = widget.shell.currentIndex;

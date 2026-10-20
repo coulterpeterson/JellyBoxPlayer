@@ -3,7 +3,19 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-enum WheelButton { menu, next, previous, playPause, select }
+enum WheelButton {
+  menu,
+  next,
+  previous,
+  playPause,
+  select,
+
+  /// The Sansa's submenu (≡) button.
+  options,
+
+  /// The Sansa's power/menu button: back to the home screen.
+  home,
+}
 
 /// A classic iPod click wheel. Dragging around the ring emits [onScroll]
 /// ticks (+1 clockwise, -1 counter-clockwise) with a subtle haptic click

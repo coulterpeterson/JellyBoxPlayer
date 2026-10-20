@@ -408,10 +408,21 @@ class PlaybackNotifier extends StateNotifier<PlaybackState> {
     final song = index != null
         ? (songs ?? state.songs).elementAtOrNull(index)
         : null;
+    final measured = _targetState.duration;
     if (song != null && song.duration > Duration.zero) {
+      // Servers sometimes store a length that's short of the real audio
+      // (e.g. estimated for variable bitrate MP3s), which made the seek bar
+      // reach the end early. A song can't end before its audio does.
+      // Right after a track change the player can still report the previous
+      // track's length, so only trust it when it's plausibly this song.
+      if (measured != null &&
+          measured > song.duration &&
+          measured < song.duration * 2) {
+        return measured;
+      }
       return song.duration;
     }
-    return _targetState.duration;
+    return measured;
   }
 
   PlaybackReport _playbackReport(

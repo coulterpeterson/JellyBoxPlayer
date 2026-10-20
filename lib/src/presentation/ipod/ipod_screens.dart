@@ -30,11 +30,16 @@ class IpodMenuItem {
   final void Function(BuildContext context) onSelect;
 }
 
-IpodPage mainMenuPage() => IpodPage(
-  title: 'iPod',
-  showArt: true,
-  builder: (key) => IpodMenu(key: key, items: _mainMenuItems),
-);
+IpodPage mainMenuPage({bool sansa = false}) => sansa
+    ? IpodPage(
+        title: '',
+        builder: (key) => SansaHomeMenu(key: key, items: _mainMenuItems),
+      )
+    : IpodPage(
+        title: 'iPod',
+        showArt: true,
+        builder: (key) => IpodMenu(key: key, items: _mainMenuItems),
+      );
 
 List<IpodMenuItem> _mainMenuItems(BuildContext context, WidgetRef ref) {
   final nav = IpodNavigator.of(context);
@@ -278,6 +283,10 @@ List<IpodMenuItem> _settingsMenuItems(BuildContext context, WidgetRef ref) {
   final haptics = ref.watch(settingProvider(AppSetting.ipodHaptics));
   final black = ref.watch(settingProvider(AppSetting.ipodBlack));
   final shuffle = ref.watch(barShuffleProvider);
+  final sansa = ref.watch(retroThemeProvider) == RetroTheme.sansa;
+  void setTheme(RetroTheme theme) => settings
+    ..setEnabled(AppSetting.ipodMode, value: false)
+    ..setValue(AppSetting.retroTheme, theme.name);
   return [
     IpodMenuItem(
       'Shuffle',
@@ -296,15 +305,24 @@ List<IpodMenuItem> _settingsMenuItems(BuildContext context, WidgetRef ref) {
           settings.setEnabled(AppSetting.ipodHaptics, value: !haptics),
     ),
     IpodMenuItem(
-      'Colour',
-      detail: black ? 'Black' : 'Silver',
+      'Theme',
+      detail: sansa ? 'Not Cupertino' : 'Cupertino',
       chevron: false,
-      onSelect: (_) => settings.setEnabled(AppSetting.ipodBlack, value: !black),
+      onSelect: (_) =>
+          setTheme(sansa ? RetroTheme.cupertino : RetroTheme.sansa),
     ),
+    if (!sansa)
+      IpodMenuItem(
+        'Colour',
+        detail: black ? 'Black' : 'Silver',
+        chevron: false,
+        onSelect: (_) =>
+            settings.setEnabled(AppSetting.ipodBlack, value: !black),
+      ),
     IpodMenuItem(
-      'Exit iPod Mode',
+      sansa ? 'Exit Sansa Mode' : 'Exit iPod Mode',
       chevron: false,
-      onSelect: (_) => settings.setEnabled(AppSetting.ipodMode, value: false),
+      onSelect: (_) => setTheme(RetroTheme.off),
     ),
   ];
 }
@@ -331,16 +349,17 @@ class IpodRows extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      final sansa = RetroSkinScope.isSansa(context);
       final rowHeight = ipodRowHeight(constraints.maxHeight + 24);
       final visible = (constraints.maxHeight / rowHeight).floor();
-      final overflow = labels.length > visible;
+      final overflow = labels.length > visible && !sansa;
       final fontSize = rowHeight * 0.58;
       return Stack(
         children: [
           Column(
             children: [
               for (var i = top; i < math.min(labels.length, top + visible); i++)
-                _row(
+                (sansa ? _sansaRow : _row)(
                   label: labels[i],
                   detail: details?[i],
                   chevron: chevrons?[i] ?? true,
@@ -366,6 +385,67 @@ class IpodRows extends StatelessWidget {
       );
     },
   );
+
+  /// The Sansa's highlight: a white bar with arrows either side.
+  Widget _sansaRow({
+    required String label,
+    required String? detail,
+    required bool chevron,
+    required bool highlighted,
+    required double height,
+    required double fontSize,
+    required double rightInset,
+  }) {
+    const navy = Color(0xFF14284B);
+    const arrow = Color(0xFF2361C8);
+    final style = sansaTextStyle.copyWith(fontSize: fontSize, color: navy);
+    return Container(
+      height: height,
+      margin: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: highlighted
+          ? BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0xFFFFFFFF), Color(0xFFE4EEF8)],
+              ),
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(color: const Color(0xFF9DB9DA)),
+            )
+          : null,
+      child: Row(
+        children: [
+          if (highlighted)
+            Icon(Icons.arrow_left, size: fontSize * 1.2, color: arrow)
+          else
+            SizedBox(width: fontSize * 1.2),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style.copyWith(
+                fontWeight: highlighted ? FontWeight.w700 : FontWeight.w600,
+              ),
+            ),
+          ),
+          if (detail != null)
+            Text(
+              detail,
+              style: style.copyWith(
+                fontWeight: FontWeight.w400,
+                color: const Color(0xFF34507E),
+              ),
+            ),
+          if (highlighted)
+            Icon(Icons.arrow_right, size: fontSize * 1.2, color: arrow)
+          else
+            SizedBox(width: fontSize * 1.2),
+        ],
+      ),
+    );
+  }
 
   Widget _row({
     required String label,
@@ -541,6 +621,155 @@ class _IpodMenuState extends IpodScreenState<IpodMenu>
       labels: [for (final item in _items) item.label],
       details: [for (final item in _items) item.detail],
       chevrons: [for (final item in _items) item.chevron],
+    );
+  }
+}
+
+/// The Sansa's home screen: one big glossy icon per menu, scrolled
+/// vertically with its neighbours peeking in above and below.
+class SansaHomeMenu extends ConsumerStatefulWidget {
+  const SansaHomeMenu({required this.items, super.key});
+
+  final List<IpodMenuItem> Function(BuildContext context, WidgetRef ref) items;
+
+  @override
+  ConsumerState<SansaHomeMenu> createState() => _SansaHomeMenuState();
+}
+
+class _SansaHomeMenuState extends IpodScreenState<SansaHomeMenu> {
+  List<IpodMenuItem> _items = const [];
+  var _selected = 0;
+  var _direction = 1;
+
+  static const _icons = {
+    'Music': (Icons.headphones, Color(0xFFE38B2C)),
+    'Shuffle Songs': (Icons.shuffle, Color(0xFF3FA34D)),
+    'Games': (Icons.sports_esports, Color(0xFF7B4FC9)),
+    'Settings': (Icons.settings, Color(0xFF7A8594)),
+    'Now Playing': (Icons.play_arrow_rounded, Color(0xFF2F74D0)),
+  };
+
+  @override
+  void onScroll(int step) {
+    if (_items.isEmpty) return;
+    final next = (_selected + step.sign).clamp(0, _items.length - 1);
+    if (next == _selected) return;
+    setState(() {
+      _direction = step.sign;
+      _selected = next;
+    });
+  }
+
+  @override
+  void onSelect() {
+    if (_selected < _items.length) _items[_selected].onSelect(context);
+  }
+
+  Widget _icon(IpodMenuItem item, double size, {double opacity = 1}) {
+    final (icon, color) =
+        _icons[item.label] ?? (Icons.circle, const Color(0xFF2F74D0));
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            center: const Alignment(-0.35, -0.45),
+            radius: 0.95,
+            colors: [Color.lerp(color, Colors.white, 0.55)!, color],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: size * 0.12,
+              offset: Offset(0, size * 0.05),
+            ),
+          ],
+        ),
+        child: Icon(icon, size: size * 0.56, color: Colors.white),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _items = widget.items(context, ref);
+    if (_selected >= _items.length) _selected = math.max(0, _items.length - 1);
+    if (_items.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, box) {
+        final big = box.maxHeight * 0.46;
+        final small = box.maxHeight * 0.2;
+        final x = box.maxWidth * 0.08;
+        final current = _items[_selected];
+        return Stack(
+          children: [
+            if (_selected > 0)
+              Positioned(
+                left: x + (big - small) / 2,
+                top: box.maxHeight * 0.02,
+                child: _icon(_items[_selected - 1], small, opacity: 0.55),
+              ),
+            if (_selected < _items.length - 1)
+              Positioned(
+                left: x + (big - small) / 2,
+                bottom: box.maxHeight * 0.02,
+                child: _icon(_items[_selected + 1], small, opacity: 0.55),
+              ),
+            Positioned(
+              left: x,
+              top: (box.maxHeight - big) / 2,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                transitionBuilder: (child, animation) => SlideTransition(
+                  position: Tween<Offset>(
+                    begin: Offset(0, 0.4 * _direction),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: FadeTransition(opacity: animation, child: child),
+                ),
+                child: KeyedSubtree(
+                  key: ValueKey(current.label),
+                  child: _icon(current, big),
+                ),
+              ),
+            ),
+            Positioned(
+              left: x + big + box.maxWidth * 0.05,
+              right: 6,
+              top: 0,
+              bottom: 0,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  children: [
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          current.label,
+                          maxLines: 1,
+                          style: sansaTextStyle.copyWith(
+                            fontSize: box.maxHeight * 0.1,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_right,
+                      size: box.maxHeight * 0.12,
+                      color: const Color(0xFF2361C8),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -867,6 +1096,144 @@ class _NowPlayingScreenState extends IpodScreenState<NowPlayingScreen> {
     return false;
   }
 
+  /// The Sansa's Now Playing: track count, cover art beside the scrolling
+  /// title, and the black progress bar on a white strip.
+  Widget _sansaLayout({
+    required LibraryItem song,
+    required ImageProvider image,
+    required String count,
+    required Duration position,
+    required Duration remaining,
+    required double fraction,
+  }) {
+    final playing = ref.watch(barPlayingProvider);
+    const navy = Color(0xFF14284B);
+    return LayoutBuilder(
+      builder: (context, box) {
+        final art = box.maxHeight * 0.5;
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF7FE0F7), Color(0xFF2EC4EA)],
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                child: Text(
+                  count,
+                  style: sansaTextStyle.copyWith(fontSize: 13, color: navy),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Row(
+                    children: [
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.25),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: Image(
+                          image: image,
+                          width: art,
+                          height: art,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Image.asset(
+                            Images.album,
+                            width: art,
+                            height: art,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final (line, size) in [
+                              (song.artistLabel, 15.0),
+                              (song.albumName ?? '', 15.0),
+                              (song.name, 17.0),
+                            ])
+                              SizedBox(
+                                height: size * 1.5,
+                                child: MarqueeText(
+                                  line,
+                                  style: sansaTextStyle.copyWith(
+                                    fontSize: size,
+                                    color: navy,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                color: Colors.white,
+                padding: const EdgeInsets.fromLTRB(8, 5, 8, 3),
+                child: Column(
+                  children: [
+                    if (_showVolume)
+                      _SansaBar(fraction: _volume ?? 0)
+                    else
+                      _SansaBar(fraction: fraction),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        Text(
+                          _time(position),
+                          style: sansaTextStyle.copyWith(
+                            fontSize: 13,
+                            color: Colors.black,
+                          ),
+                        ),
+                        const Spacer(),
+                        Icon(
+                          _mode == _WheelMode.scrub
+                              ? Icons.fast_forward
+                              : playing
+                              ? Icons.play_arrow
+                              : Icons.pause,
+                          size: 16,
+                          color: const Color(0xFF2EAA3A),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '-${_time(remaining)}',
+                          style: sansaTextStyle.copyWith(
+                            fontSize: 13,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   static String _time(Duration value) {
     final minutes = value.inMinutes;
     final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
@@ -891,6 +1258,21 @@ class _NowPlayingScreenState extends IpodScreenState<NowPlayingScreen> {
     final position = _scrubTo ?? progress.position;
     final duration = progress.duration;
     final remaining = duration - position;
+
+    if (RetroSkinScope.isSansa(context)) {
+      return _sansaLayout(
+        song: song,
+        image: image,
+        count: index != null && queue.isNotEmpty
+            ? '${index + 1}/${queue.length}'
+            : '',
+        position: position,
+        remaining: remaining.isNegative ? Duration.zero : remaining,
+        fraction: duration.inMilliseconds == 0
+            ? 0
+            : position.inMilliseconds / duration.inMilliseconds,
+      );
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1128,6 +1510,36 @@ class _ProgressBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The Sansa's black progress and volume bar.
+class _SansaBar extends StatelessWidget {
+  const _SansaBar({required this.fraction});
+
+  final double fraction;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 8,
+    alignment: Alignment.centerLeft,
+    decoration: BoxDecoration(
+      color: const Color(0xFF151515),
+      borderRadius: BorderRadius.circular(1),
+    ),
+    child: FractionallySizedBox(
+      widthFactor: fraction.clamp(0.0, 1.0),
+      heightFactor: 1,
+      child: const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF8FD4FF), Color(0xFF2F74D0)],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _VolumeBar extends StatelessWidget {

@@ -46,6 +46,7 @@ enum AppSetting {
   listenBrainzApiUrl('listenbrainz_api_url', defaultValue: ''),
   lidarrUrl('lidarr_url', defaultValue: '', syncs: false),
   ipodMode('ipod_mode', syncs: false),
+  retroTheme('retro_theme', defaultValue: 'off', syncs: false),
   ipodHaptics('ipod_haptics', defaultValue: true, syncs: false),
   ipodBlack('ipod_black', syncs: false),
   telemetryOptOut('telemetry_opt_out');
@@ -114,6 +115,22 @@ final forwardCacheWindowProvider = Provider<ForwardCacheWindow>(
       )] ??
       ForwardCacheWindow.min30,
 );
+
+/// The retro player look that replaces the app, if any. The old iPod mode
+/// switch counts as Cupertino.
+final retroThemeProvider = Provider<RetroTheme>((ref) {
+  final theme =
+      RetroTheme.values.asNameMap()[_asString(
+        ref.watch(appSettingsProvider)[AppSetting.retroTheme],
+        AppSetting.retroTheme,
+      )] ??
+      RetroTheme.off;
+  if (theme == RetroTheme.off &&
+      ref.watch(settingProvider(AppSetting.ipodMode))) {
+    return RetroTheme.cupertino;
+  }
+  return theme;
+});
 
 final crossfadeProvider = Provider<Crossfade>(
   (ref) =>

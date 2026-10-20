@@ -4,10 +4,13 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:jplayer/src/core/enums/enums.dart';
 import 'package:jplayer/src/domain/providers/player_bar_provider.dart';
 import 'package:jplayer/src/domain/providers/providers.dart';
 import 'package:jplayer/src/presentation/ipod/click_wheel.dart';
 import 'package:jplayer/src/presentation/ipod/ipod_screens.dart';
+import 'package:jplayer/src/presentation/ipod/sansa_controls.dart';
 
 /// A screen shown on the iPod display. The shell forwards click wheel
 /// input to the top-most screen.
@@ -52,8 +55,23 @@ class IpodNavigator extends InheritedWidget {
   bool updateShouldNotify(IpodNavigator oldWidget) => shell != oldWidget.shell;
 }
 
-/// The whole app re-imagined as an iPod classic: a display with nested
-/// menus above a click wheel.
+/// Tells the retro screens which device they're drawn on.
+class RetroSkinScope extends InheritedWidget {
+  const RetroSkinScope({required this.sansa, required super.child, super.key});
+
+  final bool sansa;
+
+  static bool isSansa(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<RetroSkinScope>()?.sansa ??
+      false;
+
+  @override
+  bool updateShouldNotify(RetroSkinScope oldWidget) => sansa != oldWidget.sansa;
+}
+
+/// The whole app re-imagined as a classic music player: an iPod classic
+/// ("Cupertino") or a Sansa e200 ("Not Cupertino"), with nested menus
+/// above a scroll wheel.
 class IpodShell extends ConsumerStatefulWidget {
   const IpodShell({super.key});
 
@@ -62,8 +80,11 @@ class IpodShell extends ConsumerStatefulWidget {
 }
 
 class IpodShellState extends ConsumerState<IpodShell> {
-  late final List<IpodPage> _stack = [mainMenuPage()];
+  late bool _sansa = ref.read(retroThemeProvider) == RetroTheme.sansa;
+  late final List<IpodPage> _stack = [mainMenuPage(sansa: _sansa)];
   var _forward = true;
+
+  bool get _onNowPlaying => top.title == 'Now Playing';
 
   IpodPage get top => _stack.last;
 
@@ -111,7 +132,17 @@ class IpodShellState extends ConsumerState<IpodShell> {
 
   void _onButton(WheelButton button) {
     final controls = ref.read(barControlsProvider);
+    // On the Sansa, previous/next move back and forward through menus and
+    // only skip tracks on Now Playing.
+    if (_sansa && !_onNowPlaying) {
+      if (button == WheelButton.previous) button = WheelButton.menu;
+      if (button == WheelButton.next) button = WheelButton.select;
+    }
     switch (button) {
+      case WheelButton.home:
+        popToRoot();
+      case WheelButton.options:
+        if (ref.read(barSongProvider) != null) openNowPlaying();
       case WheelButton.menu:
         if (!(_screen?.onMenu() ?? false)) pop();
       case WheelButton.select:
@@ -127,6 +158,18 @@ class IpodShellState extends ConsumerState<IpodShell> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<RetroTheme>(retroThemeProvider, (_, theme) {
+      final sansa = theme == RetroTheme.sansa;
+      if (theme == RetroTheme.off || sansa == _sansa) return;
+      setState(() {
+        _sansa = sansa;
+        _forward = false;
+        _stack
+          ..clear()
+          ..add(mainMenuPage(sansa: sansa));
+      });
+    });
+    if (_sansa) return _sansaBody(context);
     final dark = ref.watch(settingProvider(AppSetting.ipodBlack));
     final haptics = ref.watch(settingProvider(AppSetting.ipodHaptics));
     final size = MediaQuery.sizeOf(context);
@@ -190,6 +233,126 @@ class IpodShellState extends ConsumerState<IpodShell> {
     );
   }
 
+  Widget _sansaBody(BuildContext context) {
+    final haptics = ref.watch(settingProvider(AppSetting.ipodHaptics));
+    final width = MediaQuery.sizeOf(context).width.clamp(0.0, 460.0);
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: IpodNavigator(
+        shell: this,
+        child: RetroSkinScope(
+          sansa: true,
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            body: DecoratedBox(
+              // Glossy black plastic.
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF26272B),
+                    Color(0xFF050506),
+                    Color(0xFF151518),
+                  ],
+                  stops: [0, 0.55, 1],
+                ),
+              ),
+              child: SafeArea(
+                child: Center(
+                  child: SizedBox(
+                    width: width,
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            width * 0.07,
+                            width * 0.03,
+                            width * 0.07,
+                            0,
+                          ),
+                          child: AspectRatio(
+                            aspectRatio: 1.02,
+                            child: _sansaDisplay(),
+                          ),
+                        ),
+                        SizedBox(height: width * 0.04),
+                        Text(
+                          'sansa',
+                          style: TextStyle(
+                            fontFamily: 'Arial',
+                            fontSize: width * 0.065,
+                            letterSpacing: 1.5,
+                            color: const Color(0xFFCFD0D5),
+                          ),
+                        ),
+                        Expanded(
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              SansaControls(
+                                size: width * 0.74,
+                                haptics: haptics,
+                                onScroll: _onScroll,
+                                onButton: _onButton,
+                              ),
+                              Positioned(
+                                left: width * 0.05,
+                                bottom: width * 0.03,
+                                child: SansaMenuButton(
+                                  size: width * 0.1,
+                                  haptics: haptics,
+                                  onPressed: () => _onButton(WheelButton.home),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sansaDisplay() => Container(
+    padding: const EdgeInsets.all(2),
+    decoration: BoxDecoration(
+      color: const Color(0xFF3A3B40),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: DefaultTextStyle(
+        style: sansaTextStyle,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (top.title.isNotEmpty) _SansaTitleBar(title: top.title),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: Curves.easeIn,
+                transitionBuilder: _slide,
+                layoutBuilder: (current, previous) => Stack(
+                  children: [...previous, ?current],
+                ),
+                child: _page(top),
+              ),
+            ),
+            const _SansaStatusBar(),
+          ],
+        ),
+      ),
+    ),
+  );
+
   Widget _display() => Container(
     padding: const EdgeInsets.all(2),
     decoration: BoxDecoration(
@@ -246,7 +409,130 @@ class IpodShellState extends ConsumerState<IpodShell> {
           begin: Offset(from, 0),
           end: Offset.zero,
         ).animate(animation),
-        child: ColoredBox(color: Colors.white, child: child),
+        child: _sansa
+            ? DecoratedBox(decoration: sansaScreenDecoration, child: child)
+            : ColoredBox(color: Colors.white, child: child),
+      ),
+    );
+  }
+}
+
+const sansaTextStyle = TextStyle(
+  fontFamily: 'Arial',
+  color: Color(0xFF14284B),
+  fontSize: 17,
+  fontWeight: FontWeight.w700,
+  height: 1.15,
+);
+
+/// The Sansa's pale blue screen background.
+const sansaScreenDecoration = BoxDecoration(
+  gradient: LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFFD7EFFC), Color(0xFF8FCDF0)],
+  ),
+);
+
+class _SansaTitleBar extends StatelessWidget {
+  const _SansaTitleBar({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 26,
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    alignment: Alignment.centerLeft,
+    decoration: const BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Color(0xFF5B8FDA), Color(0xFF2551A6)],
+      ),
+    ),
+    child: Text(
+      title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: sansaTextStyle.copyWith(color: Colors.white, fontSize: 16),
+    ),
+  );
+}
+
+/// The Sansa's bottom strip: play state, the time and the battery.
+class _SansaStatusBar extends ConsumerStatefulWidget {
+  const _SansaStatusBar();
+
+  @override
+  ConsumerState<_SansaStatusBar> createState() => _SansaStatusBarState();
+}
+
+class _SansaStatusBarState extends ConsumerState<_SansaStatusBar> {
+  final _battery = Battery();
+  Timer? _timer;
+  var _level = 100;
+  var _now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_read());
+    _timer = Timer.periodic(const Duration(seconds: 20), (_) => _read());
+  }
+
+  Future<void> _read() async {
+    var level = _level;
+    try {
+      level = await _battery.batteryLevel;
+    } on Object {
+      // Simulators and some devices don't report a level.
+    }
+    if (mounted) {
+      setState(() {
+        _level = level;
+        _now = DateTime.now();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final playing = ref.watch(barPlayingProvider);
+    final hasSong = ref.watch(barSongProvider) != null;
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF2F63BA), Color(0xFF173B82)],
+        ),
+      ),
+      child: Row(
+        children: [
+          if (hasSong) ...[
+            Icon(
+              playing ? Icons.play_arrow : Icons.pause,
+              size: 15,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            DateFormat('h:mm a').format(_now).toLowerCase(),
+            style: sansaTextStyle.copyWith(color: Colors.white, fontSize: 14),
+          ),
+          const Spacer(),
+          _BatteryGlyph(level: _level),
+        ],
       ),
     );
   }
