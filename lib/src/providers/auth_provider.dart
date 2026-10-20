@@ -187,8 +187,15 @@ class AuthNotifier extends AsyncNotifier<bool?> {
     await _rememberServerUrl(serverUrl);
     await _storage.write(key: _serverIdKey, value: serverId);
     await _storage.write(key: _serverTypeKey, value: serverType.name);
-    await _storage.delete(key: remoteUrlStorageKey);
-    await _storage.delete(key: relayUrlStorageKey);
+    // Clearing stale alternate addresses is housekeeping; a keychain that
+    // refuses the delete shouldn't block signing in.
+    for (final key in [remoteUrlStorageKey, relayUrlStorageKey]) {
+      try {
+        await _storage.delete(key: key);
+      } on Object catch (error) {
+        debugPrint('[Auth] could not clear $key: $error');
+      }
+    }
 
     ref.read(currentServerIdProvider.notifier).state = serverId;
     await _pruneAbandonedDownloads();
