@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:jplayer/src/config/routes.dart';
+import 'package:jplayer/src/core/lidarr/lidarr_models.dart';
 import 'package:jplayer/src/domain/models/models.dart';
 import 'package:jplayer/src/domain/providers/providers.dart';
 import 'package:jplayer/src/presentation/utils/utils.dart';
@@ -184,12 +185,30 @@ class DownloadsPage extends StatelessWidget {
             final playlists = ref.watch(downloadedPlaylistsProvider);
             final songs = ref.watch(standaloneDownloadedSongsProvider);
             final pending = ref.watch(pendingDownloadsProvider);
+            final allRequests = ref.watch(activeLidarrRequestsProvider);
             final requests = [
-              for (final request in ref.watch(activeLidarrRequestsProvider))
-                // The device download shows its own card from here on.
-                if (request.stage != LidarrStage.downloadingToDevice) request,
+              for (final request in allRequests)
+                // The device download shows its own card from here on, and
+                // requests Lidarr is still searching for are "Looking for".
+                if (request.stage != LidarrStage.downloadingToDevice &&
+                    request.stage != LidarrStage.searching)
+                  request,
             ];
             final inProgress = pending.length + requests.length;
+            final searching = [
+              for (final request in allRequests)
+                if (request.stage == LidarrStage.searching) request,
+            ];
+            final requested = {
+              for (final request in allRequests) request.lidarrAlbumId,
+            };
+            final missing = [
+              for (final album
+                  in ref.watch(lidarrLookingForProvider).valueOrNull ??
+                      const <LidarrAlbum>[])
+                if (!requested.contains(album.id)) album,
+            ];
+            final lookingFor = searching.length + missing.length;
 
             if (!albums.hasValue || !playlists.hasValue || !songs.hasValue) {
               final error = albums.error ?? playlists.error ?? songs.error;
@@ -216,7 +235,8 @@ class DownloadsPage extends StatelessWidget {
                   albumItems,
                   songItems,
                 ].where((items) => items.isNotEmpty).length +
-                (inProgress > 0 ? 1 : 0);
+                (inProgress > 0 ? 1 : 0) +
+                (lookingFor > 0 ? 1 : 0);
 
             if (sections == 0) {
               return const SliverToBoxAdapter(
@@ -239,6 +259,34 @@ class DownloadsPage extends StatelessWidget {
                   ),
                   if (sections > 1)
                     const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                ],
+                if (lookingFor > 0) ...[
+                  _sectionHeader(device, 'Looking for'),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        'In Lidarr, but nothing to download yet. Lidarr '
+                        'keeps checking for releases.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onPrimary.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SliverGrid.builder(
+                    gridDelegate: _gridDelegate(device),
+                    itemBuilder: (context, index) => index < searching.length
+                        ? LidarrRequestCard(request: searching[index])
+                        : LookingForCard(
+                            album: missing[index - searching.length],
+                          ),
+                    itemCount: lookingFor,
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
                 ],
                 if (playlistItems.isNotEmpty) ...[
                   if (sections > 1) _sectionHeader(device, 'Playlists'),

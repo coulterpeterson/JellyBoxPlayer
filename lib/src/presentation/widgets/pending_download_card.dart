@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:jplayer/resources/resources.dart';
+import 'package:jplayer/src/core/lidarr/lidarr_models.dart';
 import 'package:jplayer/src/core/enums/download_status.dart';
 import 'package:jplayer/src/domain/models/models.dart';
 import 'package:jplayer/src/domain/providers/providers.dart';
 import 'package:jplayer/src/presentation/widgets/album_view.dart';
+import 'package:jplayer/src/presentation/widgets/context_menu.dart';
+import 'package:jplayer/src/presentation/widgets/lidarr_album_sheet.dart';
 import 'package:jplayer/src/presentation/widgets/hover_icon_button.dart';
 import 'package:jplayer/src/providers/image_service_provider.dart';
 
@@ -111,12 +114,94 @@ class LidarrRequestCard extends ConsumerWidget {
   }
 }
 
+/// An album Lidarr is monitoring but has nothing for yet.
+class LookingForCard extends ConsumerWidget {
+  const LookingForCard({required this.album, super.key});
+
+  final LidarrAlbum album;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final url = album.coverUrl;
+    final ImageProvider image = url == null
+        ? const AssetImage(Images.album)
+        : NetworkImage(url);
+
+    void snack(String message) => ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(message)));
+
+    List<ContextMenuAction> actions(BuildContext context) => [
+      ContextMenuAction(
+        entry: ContextMenuEntry.requestFromLidarr,
+        icon: const Icon(Icons.search),
+        label: const Text('Search again'),
+        run: () async {
+          final client = ref.read(lidarrClientProvider);
+          if (client == null) return;
+          await client.searchAlbum(album.id);
+          snack('Asked Lidarr to search for "${album.title}" again');
+        },
+      ),
+      ContextMenuAction(
+        entry: ContextMenuEntry.selectSongs,
+        icon: const Icon(Icons.checklist),
+        label: const Text('Choose songs…'),
+        run: () => showLidarrAlbumSheet(context, album),
+      ),
+      ContextMenuAction(
+        entry: ContextMenuEntry.stopLooking,
+        icon: const Icon(Icons.close),
+        label: const Text('Stop looking'),
+        run: () async {
+          final client = ref.read(lidarrClientProvider);
+          if (client == null) return;
+          await client.setMonitored([album.id], monitored: false);
+          ref.invalidate(lidarrLookingForProvider);
+          snack('Lidarr stopped looking for "${album.title}"');
+        },
+      ),
+    ];
+
+    return AlbumView(
+      album: LibraryItem(
+        id: 'lidarr-${album.id}',
+        name: album.title,
+        kind: ItemKind.album,
+        albumArtist: album.artistName,
+      ),
+      alignTextStart: true,
+      showDownloadBadge: false,
+      subtitle: [
+        if (album.artistName.isNotEmpty) album.artistName,
+        'Nothing available yet',
+      ].join(' • '),
+      onTap: (_) => showLidarrAlbumSheet(context, album),
+      optionsBuilder: actions,
+      coverOverride: _DimmedCover(
+        image: image,
+        icon: Icons.manage_search,
+        ring: false,
+      ),
+      trailing: ContextMenuButton(actionsBuilder: actions),
+    );
+  }
+}
+
 class _DimmedCover extends StatelessWidget {
-  const _DimmedCover({required this.image, this.progress, this.icon});
+  const _DimmedCover({
+    required this.image,
+    this.progress,
+    this.icon,
+    this.ring = true,
+  });
 
   final ImageProvider image;
   final double? progress;
   final IconData? icon;
+
+  /// False for a still icon instead of a progress ring.
+  final bool ring;
 
   @override
   Widget build(BuildContext context) => AspectRatio(
@@ -141,14 +226,15 @@ class _DimmedCover extends StatelessWidget {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  SizedBox.expand(
-                    child: CircularProgressIndicator(
-                      value: progress,
-                      strokeWidth: 4,
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      color: Colors.white,
+                  if (ring)
+                    SizedBox.expand(
+                      child: CircularProgressIndicator(
+                        value: progress,
+                        strokeWidth: 4,
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
+                        color: Colors.white,
+                      ),
                     ),
-                  ),
                   if (progress != null)
                     Text(
                       '${(progress! * 100).round()}%',

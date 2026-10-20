@@ -41,6 +41,7 @@ enum ContextMenuEntry {
   deleteFromServer,
   requestFromLidarr,
   selectSongs,
+  stopLooking,
 }
 
 const contextMenuLayout =
@@ -372,7 +373,8 @@ List<ContextMenuAction> contextMenuActions(
         ContextMenuEntry.removeFromPlaylist ||
         ContextMenuEntry.deletePlaylist ||
         ContextMenuEntry.requestFromLidarr ||
-        ContextMenuEntry.selectSongs => null,
+        ContextMenuEntry.selectSongs ||
+        ContextMenuEntry.stopLooking => null,
       },
   ].nonNulls.toList();
 }

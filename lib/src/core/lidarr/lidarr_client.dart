@@ -296,6 +296,21 @@ class LidarrClient {
         'files': files,
       });
 
+  /// Monitored albums Lidarr is still missing tracks for (its Wanted ›
+  /// Missing page), newest release first.
+  Future<List<LidarrAlbum>> wantedMissing({int pageSize = 100}) async {
+    final data = await _get('wanted/missing', {
+      'page': 1,
+      'pageSize': pageSize,
+      'sortKey': 'releaseDate',
+      'sortDirection': 'descending',
+      'includeArtist': true,
+      'monitored': true,
+    });
+    final records = data is Map ? data['records'] : data;
+    return [for (final json in _list(records)) LidarrAlbum(json)];
+  }
+
   Future<List<LidarrQueueItem>> queue() async {
     final data = await _get('queue', {
       'pageSize': 200,
