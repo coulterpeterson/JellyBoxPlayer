@@ -109,6 +109,7 @@ flutter:
     - assets/db/migrations/
     - assets/icons/
     - assets/images/
+    - assets/images/sansa/
 
   shaders:
     - shaders/studio_aurora.frag

@@ -141,7 +141,11 @@ class IpodShellState extends ConsumerState<IpodShell> {
       case WheelButton.home:
         popToRoot();
       case WheelButton.options:
-        if (ref.read(barSongProvider) != null) openNowPlaying();
+        if (top.title == 'Music Options') {
+          pop();
+        } else {
+          push(musicOptionsPage());
+        }
       case WheelButton.menu:
         if (!(_screen?.onMenu() ?? false)) pop();
       case WheelButton.select:
@@ -290,14 +294,14 @@ class IpodShellState extends ConsumerState<IpodShell> {
                             alignment: Alignment.center,
                             children: [
                               SansaControls(
-                                size: width * 0.74,
+                                size: width * 0.72,
                                 haptics: haptics,
                                 onScroll: _onScroll,
                                 onButton: _onButton,
                               ),
                               Positioned(
-                                left: width * 0.05,
-                                bottom: width * 0.03,
+                                left: width * 0.01,
+                                bottom: 0,
                                 child: SansaMenuButton(
                                   size: width * 0.1,
                                   haptics: haptics,
@@ -409,7 +413,7 @@ class IpodShellState extends ConsumerState<IpodShell> {
           end: Offset.zero,
         ).animate(animation),
         child: _sansa
-            ? DecoratedBox(decoration: sansaScreenDecoration, child: child)
+            ? SansaScreenBackground(child: child)
             : ColoredBox(color: Colors.white, child: child),
       ),
     );
@@ -424,14 +428,71 @@ const sansaTextStyle = TextStyle(
   height: 1.15,
 );
 
-/// The Sansa's pale blue screen background.
-const sansaScreenDecoration = BoxDecoration(
-  gradient: LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFFD7EFFC), Color(0xFF8FCDF0)],
-  ),
-);
+/// The Sansa's screen: a sky-blue gradient with the curved gloss sweep
+/// across its lower half.
+class SansaScreenBackground extends StatelessWidget {
+  const SansaScreenBackground({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(painter: const _SansaGlossPainter(), child: child);
+}
+
+class _SansaGlossPainter extends CustomPainter {
+  const _SansaGlossPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFB3D7F0), Color(0xFF7DB5E1), Color(0xFF5596CF)],
+          stops: [0, 0.55, 1],
+        ).createShader(rect),
+    );
+    // The gloss: a curve rising from the left edge to the right, with a
+    // soft lighter band under it.
+    final w = size.width;
+    final h = size.height;
+    final curve = Path()
+      ..moveTo(0, h * 0.74)
+      ..quadraticBezierTo(w * 0.45, h * 0.68, w, h * 0.55);
+    final band = Path.from(curve)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+    canvas
+      ..drawPath(
+        band,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.white.withValues(alpha: 0.2),
+              Colors.white.withValues(alpha: 0.04),
+            ],
+          ).createShader(Rect.fromLTWH(0, h * 0.55, w, h * 0.45)),
+      )
+      ..drawPath(
+        curve,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4
+          ..color = Colors.white.withValues(alpha: 0.55)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.8),
+      );
+  }
+
+  @override
+  bool shouldRepaint(_SansaGlossPainter oldDelegate) => false;
+}
 
 class _SansaTitleBar extends StatelessWidget {
   const _SansaTitleBar({required this.title});
@@ -514,14 +575,17 @@ class _SansaStatusBarState extends ConsumerState<_SansaStatusBar> {
     final playing = ref.watch(barPlayingProvider);
     final hasSong = ref.watch(barSongProvider) != null;
     return Container(
-      height: 24,
+      height: 26,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: const BoxDecoration(
+        // Brushed silver, like the e200's bottom strip.
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFF2F63BA), Color(0xFF173B82)],
+          colors: [Color(0xFFCBD3DB), Color(0xFFA3AEB9), Color(0xFF8B97A3)],
+          stops: [0, 0.5, 1],
         ),
+        border: Border(top: BorderSide(color: Color(0xFFE6ECF1))),
       ),
       child: Row(
         children: [
@@ -535,7 +599,13 @@ class _SansaStatusBarState extends ConsumerState<_SansaStatusBar> {
           ],
           Text(
             _clock(_now),
-            style: sansaTextStyle.copyWith(color: Colors.white, fontSize: 14),
+            style: sansaTextStyle.copyWith(
+              color: Colors.white,
+              fontSize: 15,
+              shadows: const [
+                Shadow(color: Color(0x80404A55), offset: Offset(0, 1)),
+              ],
+            ),
           ),
           const Spacer(),
           _BatteryGlyph(level: _level),

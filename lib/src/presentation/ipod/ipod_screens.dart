@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
+import 'package:just_audio/just_audio.dart' show LoopMode;
 import 'package:jplayer/resources/resources.dart';
 import 'package:jplayer/src/core/enums/enums.dart';
 import 'package:jplayer/src/data/backend/library_query.dart';
@@ -625,8 +626,10 @@ class _IpodMenuState extends IpodScreenState<IpodMenu>
   }
 }
 
-/// The Sansa's home screen: one big glossy icon per menu, scrolled
-/// vertically with its neighbours peeking in above and below.
+/// The Sansa's home screen: the menus' icons sit on a big circle whose
+/// centre is off-screen to the left. The selected one is at the circle's
+/// right-hand point with its name beside it, and each notch of the dial
+/// rotates the next one into place, wrapping round like the real thing.
 class SansaHomeMenu extends ConsumerStatefulWidget {
   const SansaHomeMenu({required this.items, super.key});
 
@@ -636,140 +639,160 @@ class SansaHomeMenu extends ConsumerStatefulWidget {
   ConsumerState<SansaHomeMenu> createState() => _SansaHomeMenuState();
 }
 
-class _SansaHomeMenuState extends IpodScreenState<SansaHomeMenu> {
+class _SansaHomeMenuState extends IpodScreenState<SansaHomeMenu>
+    with SingleTickerProviderStateMixin {
   List<IpodMenuItem> _items = const [];
-  var _selected = 0;
-  var _direction = 1;
+
+  /// Unbounded so the circle can keep turning; the selection is this
+  /// modulo the number of items.
+  var _target = 0;
+  late final _turn = AnimationController.unbounded(vsync: this);
 
   static const _icons = {
-    'Music': (Icons.headphones, Color(0xFFE38B2C)),
-    'Shuffle Songs': (Icons.shuffle, Color(0xFF3FA34D)),
-    'Games': (Icons.sports_esports, Color(0xFF7B4FC9)),
-    'Settings': (Icons.settings, Color(0xFF7A8594)),
-    'Now Playing': (Icons.play_arrow_rounded, Color(0xFF2F74D0)),
+    'Music': 'assets/images/sansa/music.png',
+    'Shuffle Songs': 'assets/images/sansa/shuffle.png',
+    'Games': 'assets/images/sansa/games.png',
+    'Settings': 'assets/images/sansa/settings.png',
+    'Now Playing': 'assets/images/sansa/now_playing.png',
   };
+
+  /// The angle between neighbouring icons on the circle.
+  static const _step = math.pi / 4.1;
+
+  int get _selected => _items.isEmpty ? 0 : _target % _items.length;
+
+  @override
+  void dispose() {
+    _turn.dispose();
+    super.dispose();
+  }
 
   @override
   void onScroll(int step) {
     if (_items.isEmpty) return;
-    final next = (_selected + step.sign).clamp(0, _items.length - 1);
-    if (next == _selected) return;
-    setState(() {
-      _direction = step.sign;
-      _selected = next;
-    });
+    _target += step.sign;
+    _turn.animateTo(
+      _target.toDouble(),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   @override
   void onSelect() {
-    if (_selected < _items.length) _items[_selected].onSelect(context);
-  }
-
-  Widget _icon(IpodMenuItem item, double size, {double opacity = 1}) {
-    final (icon, color) =
-        _icons[item.label] ?? (Icons.circle, const Color(0xFF2F74D0));
-    return Opacity(
-      opacity: opacity,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            center: const Alignment(-0.35, -0.45),
-            radius: 0.95,
-            colors: [Color.lerp(color, Colors.white, 0.55)!, color],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
-              blurRadius: size * 0.12,
-              offset: Offset(0, size * 0.05),
-            ),
-          ],
-        ),
-        child: Icon(icon, size: size * 0.56, color: Colors.white),
-      ),
-    );
+    if (_items.isNotEmpty) _items[_selected].onSelect(context);
   }
 
   @override
   Widget build(BuildContext context) {
     _items = widget.items(context, ref);
-    if (_selected >= _items.length) _selected = math.max(0, _items.length - 1);
     if (_items.isEmpty) return const SizedBox.shrink();
     return LayoutBuilder(
-      builder: (context, box) {
-        final big = box.maxHeight * 0.46;
-        final small = box.maxHeight * 0.2;
-        final x = box.maxWidth * 0.08;
-        final current = _items[_selected];
-        return Stack(
-          children: [
-            if (_selected > 0)
-              Positioned(
-                left: x + (big - small) / 2,
-                top: box.maxHeight * 0.02,
-                child: _icon(_items[_selected - 1], small, opacity: 0.55),
-              ),
-            if (_selected < _items.length - 1)
-              Positioned(
-                left: x + (big - small) / 2,
-                bottom: box.maxHeight * 0.02,
-                child: _icon(_items[_selected + 1], small, opacity: 0.55),
-              ),
-            Positioned(
-              left: x,
-              top: (box.maxHeight - big) / 2,
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                transitionBuilder: (child, animation) => SlideTransition(
-                  position: Tween<Offset>(
-                    begin: Offset(0, 0.4 * _direction),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: FadeTransition(opacity: animation, child: child),
-                ),
-                child: KeyedSubtree(
-                  key: ValueKey(current.label),
-                  child: _icon(current, big),
-                ),
-              ),
-            ),
-            Positioned(
-              left: x + big + box.maxWidth * 0.05,
-              right: 6,
-              top: 0,
-              bottom: 0,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  children: [
-                    Flexible(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          current.label,
-                          maxLines: 1,
-                          style: sansaTextStyle.copyWith(
-                            fontSize: box.maxHeight * 0.1,
-                          ),
+      builder: (context, box) => AnimatedBuilder(
+        animation: _turn,
+        builder: (context, _) => _wheel(box),
+      ),
+    );
+  }
+
+  Widget _wheel(BoxConstraints box) {
+    final n = _items.length;
+    final h = box.maxHeight;
+    final w = box.maxWidth;
+    final big = h * 0.44;
+    // Proportions fitted to the e200: the neighbours sit about a third of
+    // the screen above and below and curve out to the right; the next ones
+    // out swing further right towards the corners.
+    final rx = h * 0.4;
+    final ry = h * 0.42;
+    final focus = Offset(w * 0.22, h * 0.48);
+    final centre = focus + Offset(rx, 0);
+    final position = _turn.value;
+
+    double angleFor(double offset) {
+      final o = offset.abs();
+      final a = o <= 1 ? o * 60 : 60 + (o - 1) * 35;
+      return offset.sign * a * math.pi / 180;
+    }
+
+    final placed = <(double, Widget)>[];
+    for (var i = 0; i < n; i++) {
+      // How far round the curve this icon is from the focus, wrapped so the
+      // list is continuous.
+      var offset = (i - position) % n;
+      if (offset > n / 2) offset -= n;
+      if (offset.abs() > 2.4) continue;
+      final angle = angleFor(offset);
+      final closeness = (1 - offset.abs()).clamp(0.0, 1.0);
+      final size =
+          big *
+          (offset.abs() <= 1
+              ? 1 - 0.45 * offset.abs()
+              : 0.55 - 0.08 * (offset.abs() - 1));
+      final at = centre + Offset(-math.cos(angle) * rx, math.sin(angle) * ry);
+      final path = _icons[_items[i].label];
+      placed.add((
+        closeness,
+        Positioned(
+          left: at.dx - size / 2,
+          top: at.dy - size / 2,
+          width: size,
+          height: size,
+          child: Opacity(
+            opacity: offset.abs() > 1.6 ? 0.85 : 1,
+            child: path == null
+                ? Icon(Icons.circle, size: size, color: Colors.white54)
+                : Image.asset(path, filterQuality: FilterQuality.medium),
+          ),
+        ),
+      ));
+    }
+    // Draw the nearest icon last so it sits on top.
+    placed.sort((a, b) => a.$1.compareTo(b.$1));
+
+    final label = _items[_selected].label;
+    final settled = (position - _target).abs() < 0.35;
+    return Stack(
+      clipBehavior: Clip.hardEdge,
+      children: [
+        for (final (_, icon) in placed) icon,
+        Positioned(
+          left: w * 0.55,
+          right: 6,
+          top: 0,
+          bottom: 0,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 120),
+            opacity: settled ? 1 : 0,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: sansaTextStyle.copyWith(
+                          fontSize: h * 0.085,
+                          color: const Color(0xFF1D3557),
                         ),
                       ),
                     ),
-                    Icon(
-                      Icons.arrow_right,
-                      size: box.maxHeight * 0.12,
-                      color: const Color(0xFF2361C8),
-                    ),
-                  ],
-                ),
+                  ),
+                  Icon(
+                    Icons.arrow_right,
+                    size: h * 0.11,
+                    color: const Color(0xFF7D93AE),
+                  ),
+                ],
               ),
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -995,22 +1018,82 @@ class _PanningArtState extends State<_PanningArt>
   );
 }
 
-IpodPage nowPlayingPage() => IpodPage(
+IpodPage nowPlayingPage({bool scrub = false}) => IpodPage(
   title: 'Now Playing',
-  builder: (key) => NowPlayingScreen(key: key),
+  builder: (key) => NowPlayingScreen(key: key, scrub: scrub),
 );
+
+/// The Sansa's Music Options (its ≡ button): shuffle, repeat and a few
+/// shortcuts for the current song.
+IpodPage musicOptionsPage() => IpodPage(
+  title: 'Music Options',
+  builder: (key) => IpodMenu(key: key, items: _musicOptionItems),
+);
+
+List<IpodMenuItem> _musicOptionItems(BuildContext context, WidgetRef ref) {
+  final nav = IpodNavigator.of(context);
+  final controls = ref.read(barControlsProvider);
+  final shuffle = ref.watch(barShuffleProvider);
+  final repeat = ref.watch(barRepeatProvider);
+  final hasSong = ref.watch(barSongProvider) != null;
+  return [
+    IpodMenuItem(
+      'Shuffle',
+      detail: shuffle ? 'On' : 'Off',
+      chevron: false,
+      onSelect: (_) => controls.setShuffle(enabled: !shuffle).ignore(),
+    ),
+    IpodMenuItem(
+      'Repeat',
+      detail: switch (repeat) {
+        LoopMode.off => 'Off',
+        LoopMode.one => 'Song',
+        LoopMode.all => 'All',
+      },
+      chevron: false,
+      onSelect: (_) => controls.setRepeat(switch (repeat) {
+        LoopMode.off => LoopMode.all,
+        LoopMode.all => LoopMode.one,
+        LoopMode.one => LoopMode.off,
+      }).ignore(),
+    ),
+    if (hasSong) ...[
+      IpodMenuItem(
+        'Scan Through Song',
+        chevron: false,
+        onSelect: (_) {
+          nav.pop();
+          nav.push(nowPlayingPage(scrub: true));
+        },
+      ),
+      IpodMenuItem(
+        'Back to Now Playing',
+        chevron: false,
+        onSelect: (_) => nav.openNowPlaying(),
+      ),
+    ],
+    IpodMenuItem(
+      'Back to Music List',
+      chevron: false,
+      onSelect: (_) => nav.popToRoot(),
+    ),
+  ];
+}
 
 enum _WheelMode { volume, scrub }
 
 class NowPlayingScreen extends ConsumerStatefulWidget {
-  const NowPlayingScreen({super.key});
+  const NowPlayingScreen({this.scrub = false, super.key});
+
+  /// Start with the wheel seeking instead of changing the volume.
+  final bool scrub;
 
   @override
   ConsumerState<NowPlayingScreen> createState() => _NowPlayingScreenState();
 }
 
 class _NowPlayingScreenState extends IpodScreenState<NowPlayingScreen> {
-  var _mode = _WheelMode.volume;
+  late var _mode = widget.scrub ? _WheelMode.scrub : _WheelMode.volume;
   double? _volume;
   Duration? _scrubTo;
   Timer? _hideVolume;
