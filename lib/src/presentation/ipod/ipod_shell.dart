@@ -4,7 +4,6 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:jplayer/src/core/enums/enums.dart';
 import 'package:jplayer/src/domain/providers/player_bar_provider.dart';
 import 'package:jplayer/src/domain/providers/providers.dart';
@@ -469,6 +468,14 @@ class _SansaStatusBar extends ConsumerStatefulWidget {
 }
 
 class _SansaStatusBarState extends ConsumerState<_SansaStatusBar> {
+  /// "10:26 pm", formatted by hand: intl's DateFormat needs locale data
+  /// the app doesn't load, and threw on devices outside en_US.
+  static String _clock(DateTime time) {
+    final hour = time.hour % 12 == 0 ? 12 : time.hour % 12;
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute ${time.hour < 12 ? 'am' : 'pm'}';
+  }
+
   final _battery = Battery();
   Timer? _timer;
   var _level = 100;
@@ -527,7 +534,7 @@ class _SansaStatusBarState extends ConsumerState<_SansaStatusBar> {
             const SizedBox(width: 4),
           ],
           Text(
-            DateFormat('h:mm a').format(_now).toLowerCase(),
+            _clock(_now),
             style: sansaTextStyle.copyWith(color: Colors.white, fontSize: 14),
           ),
           const Spacer(),
