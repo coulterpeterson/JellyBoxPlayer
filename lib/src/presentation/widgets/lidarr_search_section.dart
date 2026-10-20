@@ -194,11 +194,19 @@ class LidarrAlbumCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Stack(
-            children: [
-              LidarrCoverImage(url: album.coverUrl, size: width),
-              if (inLibrary) const _Badge('In library'),
-            ],
+          // The cover gives way so the title row always fits the card.
+          Flexible(
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: LayoutBuilder(
+                builder: (context, box) => Stack(
+                  children: [
+                    LidarrCoverImage(url: album.coverUrl, size: box.maxWidth),
+                    if (inLibrary) const _Badge('In library'),
+                  ],
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           Row(
@@ -279,11 +287,22 @@ class _ArtistCard extends ConsumerWidget {
       onTap: () => showLidarrArtistSheet(context, artist),
       child: Column(
         children: [
-          Stack(
-            children: [
-              LidarrCoverImage(url: artist.imageUrl, size: width, circle: true),
-              if (artist.isInLidarr) const _Badge('In Lidarr'),
-            ],
+          Flexible(
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: LayoutBuilder(
+                builder: (context, box) => Stack(
+                  children: [
+                    LidarrCoverImage(
+                      url: artist.imageUrl,
+                      size: box.maxWidth,
+                      circle: true,
+                    ),
+                    if (artist.isInLidarr) const _Badge('In Lidarr'),
+                  ],
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           Text(

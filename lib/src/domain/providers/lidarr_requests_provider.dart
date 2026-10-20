@@ -666,6 +666,25 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
         '[Lidarr] Lidarr sees ${siblings.length} entries in $parent: '
         '${[for (final e in siblings.take(15)) e.name].join(', ')}',
       );
+      // Walk up to show where Lidarr's view of the disk stops matching the
+      // download client's (usually a missing volume mount).
+      var path = parent;
+      while (siblings.isEmpty && path.lastIndexOf('/') > 0) {
+        path = path.substring(0, path.lastIndexOf('/'));
+        final entries = await lidarr.listFolder(path);
+        debugPrint(
+          '[Lidarr] Lidarr sees ${entries.length} entries in $path: '
+          '${[for (final e in entries.take(25)) e.name].join(', ')}',
+        );
+        if (entries.isNotEmpty) break;
+      }
+      if (siblings.isEmpty && path.lastIndexOf('/') == 0) {
+        final root = await lidarr.listFolder('/');
+        debugPrint(
+          '[Lidarr] Lidarr sees in /: '
+          '${[for (final e in root.take(25)) e.name].join(', ')}',
+        );
+      }
       return siblings.isEmpty
           ? "Lidarr can't see the download folder $parent. Check that "
                 'Lidarr and SABnzbd share it (volume mounts or Remote Path '
