@@ -38,8 +38,10 @@ public class NativeRoutePickerPlugin: NSObject, FlutterPlugin {
 
     presenter?.removeFromSuperview()
     let bounds = content.bounds
-    let px = x ?? bounds.midX
-    let py = y.map { content.isFlipped ? $0 : bounds.height - $0 } ?? bounds.midY
+    let px: CGFloat = x.map { CGFloat($0) } ?? bounds.midX
+    let py: CGFloat =
+      y.map { content.isFlipped ? CGFloat($0) : bounds.height - CGFloat($0) }
+      ?? bounds.midY
     let picker = AVRoutePickerView(frame: NSRect(x: px, y: py, width: 1, height: 1))
     picker.isRoutePickerButtonBordered = false
     content.addSubview(picker)
@@ -47,7 +49,7 @@ public class NativeRoutePickerPlugin: NSObject, FlutterPlugin {
     presenter = picker
 
     guard let button = firstButton(in: picker) else { return false }
-    button.performClick(nil)
+    button.performClick(button)
     return true
   }
 
