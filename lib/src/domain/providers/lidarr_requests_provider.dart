@@ -156,6 +156,9 @@ class LidarrRequest {
   /// Release groups already tried and abandoned for this request.
   final List<String> tried;
 
+  /// Downloaded but stuck in Lidarr's queue; [message] says why.
+  bool get isStuck => stage == LidarrStage.downloading && message != null;
+
   bool get isActive => stage != LidarrStage.done && stage != LidarrStage.failed;
 
   String get displayName {
@@ -167,6 +170,7 @@ class LidarrRequest {
 
   String get statusLabel => switch (stage) {
     LidarrStage.searching => message ?? 'Searching on Lidarr…',
+    LidarrStage.downloading when message != null => message!,
     LidarrStage.downloading =>
       progress == null
           ? 'Downloading to server…'
@@ -460,16 +464,27 @@ class LidarrRequestsNotifier extends StateNotifier<List<LidarrRequest>> {
         .toList();
     if (queued.isNotEmpty) {
       _lastQueued[request.id] = DateTime.now();
-      for (final item in queued.where((item) => item.isStuckImporting)) {
+      final stuck = queued.where((item) => item.isStuckImporting).toList();
+      for (final item in stuck) {
         await _fixImport(lidarr, request, item);
       }
       final sizes = queued.fold(0.0, (sum, item) => sum + item.size);
       final left = queued.fold(0.0, (sum, item) => sum + item.sizeLeft);
+      // Re-read: _fixImport may have noted why the download is stuck.
+      final current =
+          state.where((r) => r.id == request.id).firstOrNull ?? request;
+      final stuckReason = stuck.isEmpty
+          ? null
+          : current.stage == LidarrStage.downloading && current.message != null
+          ? current.message
+          : stuck.first.statusMessages.firstOrNull ??
+                'Downloaded, waiting for Lidarr to import it';
       _update(
-        request.copyWith(
+        current.copyWith(
           stage: LidarrStage.downloading,
           progress: () =>
               sizes > 0 ? (1 - left / sizes).clamp(0.0, 1.0).toDouble() : null,
+          message: () => stuckReason,
         ),
       );
       return;

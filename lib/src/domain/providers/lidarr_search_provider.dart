@@ -136,22 +136,29 @@ final lidarrAlbumTracksProvider = FutureProvider.autoDispose
           .releaseGroupTracks(album.foreignAlbumId);
     });
 
-/// Albums Lidarr is monitoring but has nothing for yet: no files on disk
-/// and nothing downloading. Refreshes every couple of minutes while shown.
-final lidarrLookingForProvider = FutureProvider.autoDispose<List<LidarrAlbum>>((
-  ref,
-) async {
-  final client = ref.watch(lidarrClientProvider);
-  if (client == null) return const [];
-  final timer = Timer(const Duration(minutes: 2), ref.invalidateSelf);
-  ref.onDispose(timer.cancel);
-  final results = await Future.wait([client.wantedMissing(), client.queue()]);
-  final missing = results[0] as List<LidarrAlbum>;
-  final queued = {
-    for (final item in results[1] as List<LidarrQueueItem>) item.albumId,
-  };
-  return [
-    for (final album in missing)
-      if (album.trackFileCount == 0 && !queued.contains(album.id)) album,
-  ];
-});
+typedef LookingForEntry = ({LidarrAlbum album, LidarrQueueItem? queued});
+
+/// Albums Lidarr is monitoring that have no files yet, with their queue
+/// entry when Lidarr is downloading (or stuck importing) one. Refreshes
+/// every couple of minutes while shown.
+final lidarrLookingForProvider =
+    FutureProvider.autoDispose<List<LookingForEntry>>((ref) async {
+      final client = ref.watch(lidarrClientProvider);
+      if (client == null) return const [];
+      final timer = Timer(const Duration(minutes: 2), ref.invalidateSelf);
+      ref.onDispose(timer.cancel);
+      final results = await Future.wait([
+        client.wantedMissing(),
+        client.queue(),
+      ]);
+      final missing = results[0] as List<LidarrAlbum>;
+      final queue = {
+        for (final item in results[1] as List<LidarrQueueItem>)
+          item.albumId: item,
+      };
+      return [
+        for (final album in missing)
+          if (album.trackFileCount == 0)
+            (album: album, queued: queue[album.id]),
+      ];
+    });

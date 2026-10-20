@@ -203,10 +203,10 @@ class DownloadsPage extends StatelessWidget {
               for (final request in allRequests) request.lidarrAlbumId,
             };
             final missing = [
-              for (final album
+              for (final entry
                   in ref.watch(lidarrLookingForProvider).valueOrNull ??
-                      const <LidarrAlbum>[])
-                if (!requested.contains(album.id)) album,
+                      const <LookingForEntry>[])
+                if (!requested.contains(entry.album.id)) entry,
             ];
             final lookingFor = searching.length + missing.length;
 
@@ -282,7 +282,7 @@ class DownloadsPage extends StatelessWidget {
                     itemBuilder: (context, index) => index < searching.length
                         ? LidarrRequestCard(request: searching[index])
                         : LookingForCard(
-                            album: missing[index - searching.length],
+                            entry: missing[index - searching.length],
                           ),
                     itemCount: lookingFor,
                   ),

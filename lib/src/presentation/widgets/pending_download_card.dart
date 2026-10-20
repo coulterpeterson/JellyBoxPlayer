@@ -68,7 +68,8 @@ class PendingDownloadCard extends ConsumerWidget {
   }
 }
 
-/// The same placeholder for an album Lidarr is still fetching.
+/// A JellyBox request to Lidarr: a progress ring while it downloads, and
+/// the "Looking for" look while nothing is available.
 class LidarrRequestCard extends ConsumerWidget {
   const LidarrRequestCard({required this.request, super.key});
 
@@ -76,20 +77,23 @@ class LidarrRequestCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(lidarrRequestsProvider.notifier);
+    if (request.stage == LidarrStage.searching) {
+      return _LidarrAlbumStatusCard(
+        albumId: request.lidarrAlbumId,
+        title: request.displayName,
+        artistName: request.artistName,
+        coverUrl: request.coverUrl,
+        status: request.message ?? 'Nothing available yet',
+        onStopped: () => notifier.dismiss(request.id),
+      );
+    }
     final failed = request.stage == LidarrStage.failed;
+    final stuck = request.isStuck;
     final url = request.coverUrl;
     final ImageProvider image = url == null
         ? const AssetImage(Images.album)
         : NetworkImage(url);
-    final progress = switch (request.stage) {
-      LidarrStage.downloading => request.progress,
-      LidarrStage.searching ||
-      LidarrStage.waitingForServer ||
-      LidarrStage.downloadingToDevice => null,
-      LidarrStage.done => 1.0,
-      LidarrStage.failed => 0.0,
-    };
-
     return AlbumView(
       album: LibraryItem(
         id: request.id,
@@ -102,27 +106,84 @@ class LidarrRequestCard extends ConsumerWidget {
       subtitle: request.statusLabel,
       coverOverride: _DimmedCover(
         image: image,
-        progress: progress,
-        icon: failed ? Icons.error_outline : Icons.cloud_download_outlined,
+        progress: request.stage == LidarrStage.downloading
+            ? request.progress
+            : null,
+        ring: !failed && !stuck,
+        icon: failed || stuck
+            ? Icons.warning_amber_rounded
+            : Icons.cloud_download_outlined,
       ),
       trailing: _CancelButton(
         tooltip: failed ? 'Dismiss' : 'Stop tracking this request',
-        onPressed: () =>
-            ref.read(lidarrRequestsProvider.notifier).dismiss(request.id),
+        onPressed: () => notifier.dismiss(request.id),
       ),
     );
   }
 }
 
-/// An album Lidarr is monitoring but has nothing for yet.
-class LookingForCard extends ConsumerWidget {
-  const LookingForCard({required this.album, super.key});
+/// An album Lidarr is monitoring that has no files yet.
+class LookingForCard extends StatelessWidget {
+  const LookingForCard({required this.entry, super.key});
 
-  final LidarrAlbum album;
+  final LookingForEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final album = entry.album;
+    final queued = entry.queued;
+    final stuckReason = queued == null || !queued.isStuckImporting
+        ? null
+        : queued.statusMessages.firstOrNull ??
+              'Downloaded, waiting for Lidarr to import it';
+    return _LidarrAlbumStatusCard(
+      albumId: album.id,
+      title: album.title,
+      artistName: album.artistName,
+      coverUrl: album.coverUrl,
+      album: album,
+      status:
+          stuckReason ??
+          switch (queued?.progress) {
+            null when queued != null => 'Downloading…',
+            final double progress => 'Downloading ${(progress * 100).round()}%',
+            _ => 'Nothing available yet',
+          },
+      downloading: queued != null && stuckReason == null,
+      progress: queued?.progress,
+      stuck: stuckReason != null,
+    );
+  }
+}
+
+class _LidarrAlbumStatusCard extends ConsumerWidget {
+  const _LidarrAlbumStatusCard({
+    required this.albumId,
+    required this.title,
+    required this.artistName,
+    required this.coverUrl,
+    required this.status,
+    this.album,
+    this.downloading = false,
+    this.stuck = false,
+    this.progress,
+    this.onStopped,
+  });
+
+  final int albumId;
+  final String title;
+  final String artistName;
+  final String? coverUrl;
+  final String status;
+  final LidarrAlbum? album;
+  final bool downloading;
+  final bool stuck;
+  final double? progress;
+  final VoidCallback? onStopped;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final url = album.coverUrl;
+    final url = coverUrl;
     final ImageProvider image = url == null
         ? const AssetImage(Images.album)
         : NetworkImage(url);
@@ -130,6 +191,13 @@ class LookingForCard extends ConsumerWidget {
     void snack(String message) => ScaffoldMessenger.maybeOf(
       context,
     )?.showSnackBar(SnackBar(content: Text(message)));
+
+    Future<void> openTracks(BuildContext context) async {
+      final client = ref.read(lidarrClientProvider);
+      if (client == null) return;
+      final resolved = album ?? await client.album(albumId);
+      if (context.mounted) await showLidarrAlbumSheet(context, resolved);
+    }
 
     List<ContextMenuAction> actions(BuildContext context) => [
       ContextMenuAction(
@@ -139,15 +207,15 @@ class LookingForCard extends ConsumerWidget {
         run: () async {
           final client = ref.read(lidarrClientProvider);
           if (client == null) return;
-          await client.searchAlbum(album.id);
-          snack('Asked Lidarr to search for "${album.title}" again');
+          await client.searchAlbum(albumId);
+          snack('Asked Lidarr to search for "$title" again');
         },
       ),
       ContextMenuAction(
         entry: ContextMenuEntry.selectSongs,
         icon: const Icon(Icons.checklist),
         label: const Text('Choose songs…'),
-        run: () => showLidarrAlbumSheet(context, album),
+        run: () => openTracks(context),
       ),
       ContextMenuAction(
         entry: ContextMenuEntry.stopLooking,
@@ -156,32 +224,35 @@ class LookingForCard extends ConsumerWidget {
         run: () async {
           final client = ref.read(lidarrClientProvider);
           if (client == null) return;
-          await client.setMonitored([album.id], monitored: false);
+          await client.setMonitored([albumId], monitored: false);
+          onStopped?.call();
           ref.invalidate(lidarrLookingForProvider);
-          snack('Lidarr stopped looking for "${album.title}"');
+          snack('Lidarr stopped looking for "$title"');
         },
       ),
     ];
 
     return AlbumView(
       album: LibraryItem(
-        id: 'lidarr-${album.id}',
-        name: album.title,
+        id: 'lidarr-$albumId',
+        name: title,
         kind: ItemKind.album,
-        albumArtist: album.artistName,
+        albumArtist: artistName,
       ),
       alignTextStart: true,
       showDownloadBadge: false,
-      subtitle: [
-        if (album.artistName.isNotEmpty) album.artistName,
-        'Nothing available yet',
-      ].join(' • '),
-      onTap: (_) => showLidarrAlbumSheet(context, album),
+      subtitle: [if (artistName.isNotEmpty) artistName, status].join(' • '),
+      onTap: (_) => openTracks(context),
       optionsBuilder: actions,
       coverOverride: _DimmedCover(
         image: image,
-        icon: Icons.manage_search,
-        ring: false,
+        progress: downloading ? progress : null,
+        ring: downloading,
+        icon: stuck
+            ? Icons.warning_amber_rounded
+            : downloading
+            ? Icons.cloud_download_outlined
+            : Icons.manage_search,
       ),
       trailing: ContextMenuButton(actionsBuilder: actions),
     );
