@@ -51,6 +51,16 @@ Connect your own [Lidarr](https://lidarr.audio) under **Settings › Connected s
 
 The theme's own Settings menu switches between the two themes or exits.
 
+| Cupertino: home | Cupertino: Now Playing | Cupertino: Brick |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/fork/ipod_home.png" width="250" alt="iPod theme home screen"> | <img src="docs/screenshots/fork/ipod_now_playing.png" width="250" alt="iPod theme Now Playing"> | <img src="docs/screenshots/fork/ipod_brick.png" width="250" alt="iPod theme Brick game"> |
+
+| Not Cupertino: home | Not Cupertino: Now Playing | Not Cupertino: Music Options |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/fork/sansa_home.png" width="250" alt="Sansa theme icon-wheel home screen"> | <img src="docs/screenshots/fork/sansa_now_playing.png" width="250" alt="Sansa theme Now Playing"> | <img src="docs/screenshots/fork/sansa_music_options.png" width="250" alt="Sansa theme Music Options"> |
+
+<sub>Screenshots use a made-up demo track and cover.</sub>
+
 ## Fixes to upstream JellyBox bugs
 
 Bugs that were already in JellyBox when this fork was made:
