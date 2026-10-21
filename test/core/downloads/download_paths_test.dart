@@ -215,4 +215,35 @@ void main() {
       );
     });
   });
+
+  group('rebase', () {
+    const oldContainer =
+        '/var/mobile/Containers/Data/Application/OLD-ID/Documents/music';
+
+    test('- maps a path from an old app container to the current one', () {
+      final file = File(p.join(root.path, '1275268', '24919227.m4a'))
+        ..createSync(recursive: true);
+
+      expect(
+        DownloadPaths.rebase('$oldContainer/1275268/24919227.m4a'),
+        file.path,
+      );
+    });
+
+    test('- leaves a path that still exists alone', () {
+      final file = File(p.join(root.path, 'a', 'b.mp3'))
+        ..createSync(recursive: true);
+
+      expect(DownloadPaths.rebase(file.path), file.path);
+    });
+
+    test('- leaves paths outside the music folder alone', () {
+      expect(DownloadPaths.rebase('/elsewhere/x.mp3'), '/elsewhere/x.mp3');
+    });
+
+    test('- never maps outside the download folder', () {
+      const sneaky = '$oldContainer/../../escape.mp3';
+      expect(DownloadPaths.rebase(sneaky), sneaky);
+    });
+  });
 }

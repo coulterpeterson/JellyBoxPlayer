@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:jplayer/resources/resources.dart';
 import 'package:jplayer/src/domain/models/models.dart';
+import 'package:jplayer/src/core/downloads/download_paths.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -36,12 +37,45 @@ class DownloadDatabase {
       await Directory(override).create(recursive: true);
       await _adoptLegacyLocation(filePath, override);
     }
-    return openDatabase(
+    final db = await openDatabase(
       join(dbPath, filePath),
       version: _schemaVersion,
       onCreate: (db, version) => _createDB(db),
       onUpgrade: _upgradeDB,
     );
+    await _rebaseMovedFiles(db);
+    return db;
+  }
+
+  /// Points songs saved by an earlier install back at their files: iOS
+  /// gives a reinstalled or updated app a new data container path, which
+  /// left the stored absolute paths dangling and the songs unplayable.
+  Future<void> _rebaseMovedFiles(Database db) async {
+    final root = DownloadPaths.root;
+    if (root == null) return;
+    try {
+      final rows = await db.query('Downloads', columns: ['Id', 'FilePath']);
+      final batch = db.batch();
+      var moved = 0;
+      for (final row in rows) {
+        final stored = row['FilePath']! as String;
+        if (stored.startsWith(root)) continue;
+        final rebased = DownloadPaths.rebase(stored);
+        if (rebased == stored || !File(rebased).existsSync()) continue;
+        batch.update(
+          'Downloads',
+          {'FilePath': rebased},
+          where: 'Id = ? AND FilePath = ?',
+          whereArgs: [row['Id'], stored],
+        );
+        moved++;
+      }
+      if (moved == 0) return;
+      await batch.commit(noResult: true);
+      debugPrint('[Downloads] re-pointed $moved songs at the moved app folder');
+    } on Object catch (error) {
+      debugPrint('[Downloads] could not re-point moved songs: $error');
+    }
   }
 
   Future<void> _adoptLegacyLocation(String filePath, String dbPath) async {
@@ -565,7 +599,8 @@ class DownloadDatabase {
       whereArgs: [id, serverId],
     );
 
-    return results.firstOrNull?['FilePath'] as String?;
+    final path = results.firstOrNull?['FilePath'] as String?;
+    return path == null ? null : DownloadPaths.rebase(path);
   }
 }
 
@@ -574,7 +609,7 @@ DownloadedSong _downloadedSongFromRow(Map<String, Object?> row) =>
       item: LibraryItem.fromJson(
         jsonDecode(row['Data']! as String) as Map<String, dynamic>,
       ),
-      filePath: row['FilePath']! as String,
+      filePath: DownloadPaths.rebase(row['FilePath']! as String),
       sizeInBytes: row['SizeInBytes']! as int,
       downloadDate: DateTime.fromMillisecondsSinceEpoch(
         row['DownloadDate']! as int,

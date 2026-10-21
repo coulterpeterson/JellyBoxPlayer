@@ -34,7 +34,6 @@ Connect your own [Lidarr](https://lidarr.audio) under **Settings › Connected s
 - **Lyrics fallback:** when the server has no lyrics, they come from [LRCLIB](https://lrclib.net), a free lyrics database that needs no account. Synced lyrics are used when available.
 - **Music-only playlists:** playlists that only hold TV episodes or movies are hidden, and so are non-song items inside mixed playlists. This also fixes an Emby quirk that listed favourite movies and single songs as playlists.
 - **Crossfade** (Settings › Playback): fades the end of each song out and the next in, from 2 to 12 seconds.
-- **Seek bar fix:** the countdown no longer reaches 0:00 before the song ends when the server's stored song length is too short.
 - **Settings reorganised** into Server, Playback, Appearance, Home Page, Downloads & storage, Connected services, Privacy and About.
 - **Scrollable menus:** long context menus scroll instead of running off the screen.
 
@@ -52,11 +51,18 @@ Connect your own [Lidarr](https://lidarr.audio) under **Settings › Connected s
 
 The theme's own Settings menu switches between the two themes or exits.
 
-## Diagnostics and fixes
+## Fixes to upstream JellyBox bugs
+
+Bugs that were already in JellyBox when this fork was made:
+
+- **Downloaded music stopped playing after an app update or reinstall.** Downloads were saved by absolute path, and iOS gives an app's data folder a new path when it's updated or reinstalled. The files moved but the saved paths didn't, so downloads failed to play (error -11800) until deleted and streamed instead. Stored paths are now repaired when the app starts, and remapped whenever they're read.
+- **The seek bar reached 0:00 before the song ended** when the server's stored song length was shorter than the real audio. The longer of the server's length and the player's measured length is now used.
+- **Desktop sign-in could get stuck** on the login screen when the macOS keychain refused to clear old saved addresses. That cleanup no longer blocks sign-in.
+- **The macOS app didn't build on Xcode 26:** the `native_route_picker` plugin failed to compile.
+
+## Diagnostics
 
 - Logging for playlists and favourites, every Lidarr call (without the API key) and request progress, written to the on-device log.
-- Fixed desktop sign-in getting stuck when the macOS keychain refused a cleanup step.
-- Fixed the `native_route_picker` macOS plugin building on Xcode 26.
 
 ## Building this fork
 

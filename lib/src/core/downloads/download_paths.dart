@@ -80,6 +80,32 @@ class DownloadPaths {
     }
   }
 
+  /// Maps a stored path back into the current download folder.
+  ///
+  /// iOS moves an app's data container (and changes its path) when the app
+  /// is reinstalled or updated, so absolute paths saved by an earlier
+  /// install stop existing even though the files moved along with it.
+  /// Returns [stored] unchanged when it exists or can't be mapped.
+  static String rebase(String stored) {
+    final root = _root;
+    if (root == null || File(stored).existsSync()) return stored;
+    final relative = relativeToMusic(stored);
+    if (relative == null) return stored;
+    final candidate = p.normalize(p.join(root, relative));
+    return p.isWithin(root, candidate) ? candidate : stored;
+  }
+
+  /// The part of [path] below the music folder ("<album>/<file>"), or null
+  /// when it isn't a download path.
+  static String? relativeToMusic(String path) {
+    final normalized = path.replaceAll(r'\', '/');
+    final marker = '/$musicDirectoryName/';
+    final index = normalized.lastIndexOf(marker);
+    if (index < 0) return null;
+    final relative = normalized.substring(index + marker.length);
+    return relative.isEmpty ? null : relative;
+  }
+
   static String? albumDirectory(String albumId) {
     final root = _root;
     if (root == null) return null;
