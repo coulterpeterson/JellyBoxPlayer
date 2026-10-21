@@ -7,19 +7,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:jplayer/main.dart';
 import 'package:jplayer/resources/j_player_icons.dart';
-import 'package:jplayer/src/config/constants.dart';
 import 'package:jplayer/src/config/routes.dart';
 import 'package:jplayer/src/core/discord/discord_presence_handler.dart';
 import 'package:jplayer/src/core/enums/enums.dart';
 import 'package:jplayer/src/data/services/artwork_cache.dart';
 import 'package:jplayer/src/domain/providers/cloud_provider.dart';
 import 'package:jplayer/src/domain/providers/providers.dart';
-import 'package:jplayer/src/presentation/themes/themes.dart';
 import 'package:jplayer/src/presentation/utils/utils.dart';
 import 'package:jplayer/src/presentation/widgets/widgets.dart';
 import 'package:jplayer/src/providers/auth_provider.dart';
 import 'package:jplayer/src/providers/network_type_provider.dart';
-import 'package:updatify_flutter/updatify_flutter.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -115,30 +112,10 @@ class SettingsPage extends ConsumerWidget {
   void _onPaletteSettingsPressed(BuildContext context) =>
       context.pushNamed(Routes.palette.name);
 
-  void _onChangelogPressed(BuildContext context, DeviceType device) {
-    if (device.isDesktop) {
+  void _onChangelogPressed(BuildContext context, DeviceType device) =>
       unawaited(
-        showUpdatifyDialog(
-          context,
-          projectId: updatifyProjectId,
-          backgroundColor: Themes.changelogSurface,
-          borderRadius: BorderRadius.circular(8),
-          width: MediaQuery.sizeOf(context).width / 2,
-          title: changelogTitle,
-        ),
+        showUpstreamAnnouncements(context, isDesktop: device.isDesktop),
       );
-    } else {
-      unawaited(
-        showUpdatifyBottomSheet(
-          context,
-          projectId: updatifyProjectId,
-          backgroundColor: Themes.changelogSurface,
-          borderRadius: BorderRadius.circular(8),
-          title: changelogTitle,
-        ),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -189,6 +166,13 @@ class SettingsPage extends ConsumerWidget {
                     const ServerAddressSettings(),
                     if (ref.watch(cloudAvailableProvider)) ...[
                       _sectionHeader('Jellybox Cloud'),
+                      const UpstreamNotice(
+                        message:
+                            'Jellybox Cloud is a service of the upstream '
+                            'JellyBox app. PuddingCup is a fork, so it may or '
+                            'may not work here.',
+                        margin: EdgeInsets.only(bottom: 4),
+                      ),
                       const JellyboxCloudSettings(),
                     ],
                     _sectionHeader('Playback'),
@@ -456,7 +440,7 @@ class SettingsPage extends ConsumerWidget {
                     ),
                     _settingNote(
                       context,
-                      'Jellybox counts app launches and sends crash reports to '
+                      'PuddingCup counts app launches and sends crash reports to '
                       'help fix bugs. Nothing about your library or listening '
                       'is collected.',
                     ),

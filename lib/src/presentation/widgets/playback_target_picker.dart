@@ -849,7 +849,7 @@ class _ShareDevicesDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AlertDialog.adaptive(
-    title: const Text('Share what JellyBox found?'),
+    title: const Text('Share what PuddingCup found?'),
     content: Text(
       count == 1
           ? 'Send the details of the DLNA device on your network? It stays '

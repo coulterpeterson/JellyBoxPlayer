@@ -70,7 +70,7 @@ Future<void> main() async {
           : getApplicationSupportDirectory,
       adoptFrom: Platform.isAndroid ? getApplicationSupportDirectory : null,
     ),
-    header: 'JellyBox ${appInfo.version}+${appInfo.buildNumber} starting',
+    header: 'PuddingCup ${appInfo.version}+${appInfo.buildNumber} starting',
   );
   DeviceLog.install();
 

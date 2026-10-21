@@ -11,7 +11,6 @@ import 'package:jplayer/src/config/constants.dart';
 import 'package:jplayer/src/core/enums/enums.dart';
 import 'package:jplayer/src/domain/providers/providers.dart';
 import 'package:jplayer/src/presentation/ipod/ipod_shell.dart';
-import 'package:jplayer/src/presentation/themes/themes.dart';
 import 'package:jplayer/src/presentation/utils/utils.dart';
 import 'package:jplayer/src/presentation/widgets/widgets.dart';
 import 'package:jplayer/src/providers/auth_provider.dart';
@@ -98,17 +97,8 @@ class _MainPageState extends ConsumerState<MainPage> {
   Future<void> _maybeShowUpdates() async {
     if (!mounted) return;
     final isDesktop = _device.isDesktop;
-    await maybeShowUpdatifyPopup(
-      context,
-      projectId: updatifyProjectId,
-      popupType: isDesktop
-          ? UpdatifyPopupType.modal
-          : UpdatifyPopupType.bottomSheet,
-      backgroundColor: Themes.changelogSurface,
-      title: changelogTitle,
-      borderRadius: BorderRadius.circular(8),
-      width: isDesktop ? MediaQuery.sizeOf(context).width / 2 : null,
-    );
+    if (!await shouldAutoShowUpdatify(updatifyProjectId) || !mounted) return;
+    await showUpstreamAnnouncements(context, isDesktop: isDesktop);
   }
 
   Future<void> _requestReview() async {
@@ -165,7 +155,7 @@ class _MainPageState extends ConsumerState<MainPage> {
                         alignment: Alignment.centerLeft,
                         slide: 0,
                         child: Text(
-                          'JellyBox',
+                          'PuddingCup',
                           maxLines: 1,
                           softWrap: false,
                           style: TextStyle(

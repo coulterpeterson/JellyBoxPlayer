@@ -881,7 +881,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.upload));
       await tester.pumpAndSettle();
 
-      expect(find.text('Share what JellyBox found?'), findsOneWidget);
+      expect(find.text('Share what PuddingCup found?'), findsOneWidget);
       expect(reports, isEmpty);
 
       await tester.tap(find.text('Not now'));
@@ -929,7 +929,7 @@ void main() {
       await tester.tap(find.byIcon(Icons.upload));
       await tester.pumpAndSettle();
 
-      expect(find.text('Share what JellyBox found?'), findsOneWidget);
+      expect(find.text('Share what PuddingCup found?'), findsOneWidget);
       expect(find.textContaining('stays private'), findsOneWidget);
       expect(
         find.textContaining('support for different manufacturers'),

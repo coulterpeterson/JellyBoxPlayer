@@ -1,12 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:jplayer/src/config/constants.dart';
-import 'package:jplayer/src/presentation/themes/themes.dart';
 import 'package:jplayer/src/presentation/widgets/hover_zoom.dart';
+import 'package:jplayer/src/presentation/widgets/upstream_announcements.dart';
 import 'package:jplayer/src/providers/color_scheme_provider.dart';
 import 'package:updatify_flutter/updatify_flutter.dart';
 
-class UpdatifyBell extends ConsumerWidget {
+class UpdatifyBell extends ConsumerStatefulWidget {
   const UpdatifyBell({
     required this.isDesktop,
     this.iconSize = 28,
@@ -19,7 +21,23 @@ class UpdatifyBell extends ConsumerWidget {
   final double tapSize;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<UpdatifyBell> createState() => _UpdatifyBellState();
+}
+
+class _UpdatifyBellState extends ConsumerState<UpdatifyBell> {
+  /// Bumped after the announcements close, so the trigger checks again and
+  /// clears its dot.
+  var _opens = 0;
+
+  Future<void> _open() async {
+    await showUpstreamAnnouncements(context, isDesktop: widget.isDesktop);
+    if (mounted) setState(() => _opens++);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final iconSize = widget.iconSize;
+    final tapSize = widget.tapSize;
     final accent = ref.watch(accentColorProvider);
     return HoverZoom(
       builder: (context, hovered) => IconTheme.merge(
@@ -35,16 +53,16 @@ class UpdatifyBell extends ConsumerWidget {
             ),
           ),
           child: UpdatifyTrigger(
+            key: ValueKey(_opens),
             projectId: updatifyProjectId,
-            popupType: isDesktop
-                ? UpdatifyPopupType.modal
-                : UpdatifyPopupType.bottomSheet,
-            backgroundColor: Themes.changelogSurface,
-            title: changelogTitle,
-            borderRadius: BorderRadius.circular(8),
-            width: isDesktop
-                ? MediaQuery.sizeOf(context).width / 2
-                : double.infinity,
+            builder: (context, hasNewUpdates, _) => IconButton(
+              onPressed: () => unawaited(_open()),
+              icon: Badge(
+                isLabelVisible: hasNewUpdates,
+                smallSize: 8,
+                child: const Icon(Icons.notifications_outlined),
+              ),
+            ),
           ),
         ),
       ),

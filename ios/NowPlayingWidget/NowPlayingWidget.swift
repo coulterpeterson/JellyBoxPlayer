@@ -64,11 +64,11 @@ struct WidgetSnapshot {
   var background = defaultBackground
   var foreground = Color.white
 
-  static let idle = WidgetSnapshot(state: .idle, title: "JellyBox", artist: "Nothing playing")
+  static let idle = WidgetSnapshot(state: .idle, title: "PuddingCup", artist: "Nothing playing")
 
   static let signedOut = WidgetSnapshot(
     state: .signedOut,
-    title: "JellyBox",
+    title: "PuddingCup",
     artist: "Sign in to start listening"
   )
 

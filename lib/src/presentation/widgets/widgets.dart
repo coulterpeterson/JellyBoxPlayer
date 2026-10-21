@@ -81,5 +81,6 @@ export 'studio_mode.dart';
 export 'swipeable_artwork.dart';
 export 'update_banner.dart';
 export 'updatify_bell.dart';
+export 'upstream_announcements.dart';
 export 'volume_control.dart';
 export 'rating_stars.dart';

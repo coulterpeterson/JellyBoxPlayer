@@ -46,7 +46,8 @@ class UpdateBanner extends ConsumerWidget {
                           ),
                         ),
                         TextSpan(
-                          text: 'JellyBox ${update.version} is available  ',
+                          text:
+                              'Upstream JellyBox ${update.version} is available  ',
                         ),
                         TextSpan(
                           text: 'Download',
