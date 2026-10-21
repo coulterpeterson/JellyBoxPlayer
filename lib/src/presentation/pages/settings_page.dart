@@ -13,6 +13,7 @@ import 'package:jplayer/src/core/enums/enums.dart';
 import 'package:jplayer/src/data/services/artwork_cache.dart';
 import 'package:jplayer/src/domain/providers/cloud_provider.dart';
 import 'package:jplayer/src/domain/providers/providers.dart';
+import 'package:jplayer/src/presentation/themes/app_palette.dart';
 import 'package:jplayer/src/presentation/utils/utils.dart';
 import 'package:jplayer/src/presentation/widgets/widgets.dart';
 import 'package:jplayer/src/providers/auth_provider.dart';
@@ -219,6 +220,12 @@ class SettingsPage extends ConsumerWidget {
                       'keep the original quality.',
                     ),
                     _sectionHeader('Appearance'),
+                    const _ThemeColorPicker(),
+                    _settingNote(
+                      context,
+                      'Colours the app\'s bars, buttons and highlights. The '
+                      'Cupertino and Not Cupertino themes keep their own.',
+                    ),
                     _settingDropdown<StartPage>(
                       context: context,
                       label: 'Default start page',
@@ -746,4 +753,109 @@ class SettingsPage extends ConsumerWidget {
     icon: const Icon(JPlayer.log_out),
     label: const Text('Log out'),
   );
+}
+
+/// Swatches for the colour of the regular app interface.
+class _ThemeColorPicker extends ConsumerWidget {
+  const _ThemeColorPicker();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(themeColorProvider);
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, top: 4, bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 170,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'Colour',
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.2,
+                  color: theme.colorScheme.onPrimary.withValues(alpha: 0.7),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final color in ThemeColor.values)
+                  _Swatch(
+                    color: color,
+                    selected: color == selected,
+                    onTap: () => ref
+                        .read(appSettingsProvider.notifier)
+                        .setValue(AppSetting.themeColor, color.name),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Swatch extends StatelessWidget {
+  const _Swatch({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ThemeColor color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(color);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '${color.label} theme colour',
+      child: Tooltip(
+        message: color.label,
+        child: InkResponse(
+          onTap: onTap,
+          radius: 20,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 32,
+            height: 32,
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected ? Colors.white : Colors.white24,
+                width: selected ? 2 : 1,
+              ),
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [palette.accent, palette.panel],
+                ),
+              ),
+              child: selected
+                  ? Icon(Icons.check, size: 16, color: palette.onAccent)
+                  : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

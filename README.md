@@ -1,6 +1,14 @@
-# JellyBox — fork notes
+# PuddingCup — a JellyBox fork
 
-This fork of [JellyBox](https://github.com/avdept/JellyBoxPlayer) adds Lidarr integration, two retro player themes, and a set of library and playback improvements. The original JellyBox README follows the line below.
+<img src="assets/images/puddingcup_logo.png" width="96" alt="PuddingCup logo">
+
+PuddingCup is a fork of [JellyBox](https://github.com/avdept/JellyBoxPlayer) that adds Lidarr integration, two retro player themes, and a set of library and playback improvements. The original JellyBox README follows the line below.
+
+## Name, logo and colours
+
+- The app is called **PuddingCup**, with its own logo on every platform. It still identifies itself to servers as JellyBox Player.
+- **Settings › Appearance › Colour** picks the colour of the regular interface: red (the original JellyBox maroon), orange, yellow, green, blue, purple (the default) or white. Each keeps the original's saturation and brightness and only changes its hue. Accents are lightened where needed so text stays readable, and the colours have contrast tests.
+- **What's new** and the Jellybox Cloud settings note that they're about the upstream JellyBox app, so those features may or may not work here.
 
 ## Lidarr integration
 

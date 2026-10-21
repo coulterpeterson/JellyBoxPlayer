@@ -44,7 +44,7 @@ final AutoDisposeFutureProvider<ColorScheme?> artworkSchemeProvider =
 
 final AutoDisposeProvider<Color> accentColorProvider = Provider.autoDispose(
   (ref) {
-    final appAccent = Themes.red.colorScheme.primary;
+    final appAccent = AppPalette.of(ref.watch(themeColorProvider)).accent;
     if (!ref.watch(settingProvider(AppSetting.artworkAccent))) return appAccent;
     return ref.watch(artworkSchemeProvider).valueOrNull?.primary ?? appAccent;
   },

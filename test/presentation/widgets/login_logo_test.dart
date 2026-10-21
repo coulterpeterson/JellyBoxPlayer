@@ -35,7 +35,12 @@ void main() {
         (widget.bytesLoader as SvgAssetLoader).assetName == asset,
   );
 
-  Finder jellybox() => assetSvg(SvgPictures.jellyboxLogo);
+  Finder appLogo() => find.byWidgetPredicate(
+    (widget) =>
+        widget is Image &&
+        widget.image is AssetImage &&
+        (widget.image as AssetImage).assetName == Images.puddingcupLogo,
+  );
 
   double badgeOpacity(WidgetTester tester) => tester
       .widget<Opacity>(
@@ -48,15 +53,15 @@ void main() {
       )
       .opacity;
 
-  testWidgets('- shows the JellyBox logo alone, filling the box', (
+  testWidgets('- shows the PuddingCup logo alone, filling the box', (
     tester,
   ) async {
     await tester.pumpWidget(wrap(null));
     await tester.pumpAndSettle();
 
-    expect(jellybox(), findsOneWidget);
+    expect(appLogo(), findsOneWidget);
     expect(tester.getSize(find.byType(LoginLogo)), const Size(160, 160));
-    expect(tester.getSize(jellybox()), const Size(160, 160));
+    expect(tester.getSize(appLogo()), const Size(160, 160));
   });
 
   testWidgets('- keeps the same footprint once a server is discovered', (
@@ -68,7 +73,7 @@ void main() {
     expect(tester.getSize(find.byType(LoginLogo)), const Size(160, 160));
   });
 
-  testWidgets('- shrinks the JellyBox logo into the top left corner', (
+  testWidgets('- shrinks the PuddingCup logo into the top left corner', (
     tester,
   ) async {
     await tester.pumpWidget(wrap(null));
@@ -77,7 +82,7 @@ void main() {
 
     await tester.pumpWidget(wrap(ServerType.emby));
     await tester.pumpAndSettle();
-    final shrunk = tester.getRect(jellybox());
+    final shrunk = tester.getRect(appLogo());
 
     expect(shrunk.width, lessThan(box.width));
     expect(shrunk.left, lessThan(box.center.dx));
@@ -92,7 +97,7 @@ void main() {
     await tester.pumpWidget(wrap(ServerType.emby));
     await tester.pumpAndSettle();
 
-    final logo = tester.getSize(jellybox());
+    final logo = tester.getSize(appLogo());
     final badge = tester.getSize(assetSvg(SvgPictures.embyLogo));
 
     expect(logo, badge);
@@ -108,7 +113,7 @@ void main() {
     await tester.pumpWidget(wrap(ServerType.jellyfin));
     await tester.pump(const Duration(milliseconds: 200));
 
-    final logo = tester.getSize(jellybox());
+    final logo = tester.getSize(appLogo());
     final badge = tester.getSize(assetSvg(SvgPictures.jellyfinLogo));
 
     expect(logo.width, greaterThan(badge.width));
@@ -122,7 +127,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final box = tester.getRect(find.byType(LoginLogo));
-    final logo = tester.getRect(jellybox());
+    final logo = tester.getRect(appLogo());
     final badge = tester.getRect(assetSvg(SvgPictures.embyLogo));
 
     expect(badge.left, greaterThan(logo.left));
@@ -174,7 +179,7 @@ void main() {
     expect(assetSvg(SvgPictures.embyLogo), findsNothing);
   });
 
-  testWidgets('- returns to the lone JellyBox logo when discovery is cleared', (
+  testWidgets('- returns to the lone PuddingCup logo when discovery is cleared', (
     tester,
   ) async {
     await tester.pumpWidget(wrap(ServerType.emby));
@@ -183,7 +188,7 @@ void main() {
     await tester.pumpWidget(wrap(null));
     await tester.pumpAndSettle();
 
-    expect(tester.getSize(jellybox()), const Size(160, 160));
+    expect(tester.getSize(appLogo()), const Size(160, 160));
     expect(badgeOpacity(tester), 0);
   });
 }

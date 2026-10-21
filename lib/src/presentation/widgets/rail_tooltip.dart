@@ -74,7 +74,7 @@ class _RailTooltipState extends State<RailTooltip> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 240),
                 child: DecoratedBox(
-                  decoration: Themes.tooltipDecoration,
+                  decoration: Themes.tooltipDecorationOf(context),
                   child: Padding(
                     padding: Themes.tooltipPadding,
                     child: Text(

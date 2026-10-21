@@ -92,7 +92,10 @@ class _LoginLogoState extends State<LoginLogo> {
           children: [
             Positioned.fromRect(
               rect: Rect.lerp(logoFrom, logoTo, progress)!,
-              child: _logo(SvgPictures.jellyboxLogo),
+              child: Image.asset(
+                Images.puddingcupLogo,
+                filterQuality: FilterQuality.medium,
+              ),
             ),
             Positioned.fromRect(
               rect: Rect.lerp(badgeFrom, badgeTo, progress)!,

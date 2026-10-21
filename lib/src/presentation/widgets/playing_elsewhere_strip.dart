@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:jplayer/src/domain/providers/cloud_provider.dart';
+import 'package:jplayer/src/presentation/themes/app_palette.dart';
 import 'package:jplayer/src/presentation/utils/utils.dart';
 import 'package:jplayer/src/presentation/widgets/playback_target_picker.dart';
 
@@ -37,7 +38,7 @@ class PlayingElsewhereStrip extends ConsumerWidget {
                         Icon(
                           Icons.speaker_group_outlined,
                           size: 16,
-                          color: theme.colorScheme.onPrimary,
+                          color: AppPalette.textOn(theme.colorScheme.primary),
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -45,7 +46,7 @@ class PlayingElsewhereStrip extends ConsumerWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.labelMedium?.copyWith(
-                            color: theme.colorScheme.onPrimary,
+                            color: AppPalette.textOn(theme.colorScheme.primary),
                             fontWeight: FontWeight.w600,
                           ),
                         ),

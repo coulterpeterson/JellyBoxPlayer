@@ -1,11 +1,17 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:jplayer/resources/resources.dart';
+import 'package:jplayer/src/core/enums/theme_color.dart';
+import 'package:jplayer/src/presentation/themes/app_palette.dart';
+
+export 'app_palette.dart';
 
 abstract class Themes {
   /// Dark background for the changelog dialog/sheet, so it doesn't inherit the
-  /// maroon [BottomSheetThemeData] panel color used elsewhere in the app.
-  static const changelogSurface = Color(0xFF1C1518);
+  /// [BottomSheetThemeData] panel color used elsewhere in the app.
+  static Color changelogSurfaceOf(BuildContext context) =>
+      AppPalette.maybeOf(context)?.surface ??
+      AppPalette.of(ThemeColor.red).surface;
 
   static const tooltipDelay = Duration(milliseconds: 350);
 
@@ -20,8 +26,11 @@ abstract class Themes {
     height: 1.2,
   );
 
-  static final tooltipDecoration = BoxDecoration(
-    color: changelogSurface,
+  static BoxDecoration tooltipDecorationOf(BuildContext context) =>
+      _tooltipDecoration(changelogSurfaceOf(context));
+
+  static BoxDecoration _tooltipDecoration(Color color) => BoxDecoration(
+    color: color,
     borderRadius: BorderRadius.circular(6),
     boxShadow: const [
       BoxShadow(
@@ -32,20 +41,37 @@ abstract class Themes {
     ],
   );
 
-  static final red = ThemeData(
+  /// The original JellyBox look.
+  static final red = of(ThemeColor.red);
+
+  static final _themes = <ThemeColor, ThemeData>{};
+
+  static ThemeData of(ThemeColor color) =>
+      _themes[color] ??= _build(AppPalette.of(color));
+
+  static ThemeData _build(AppPalette palette) => ThemeData(
     useMaterial3: true,
     visualDensity: VisualDensity.adaptivePlatformDensity,
     brightness: Brightness.dark,
     fontFamily: FontFamily.gilroy,
-    colorScheme: const ColorScheme.dark(
-      primary: Color(0xFFFD2F2F),
+    extensions: [palette],
+    // The app uses onPrimary for its white text on black, so it stays white;
+    // controls that draw on the accent use the palette's onAccent instead.
+    colorScheme: ColorScheme.dark(
+      primary: palette.accent,
       onPrimary: Colors.white,
     ),
+    checkboxTheme: CheckboxThemeData(
+      checkColor: WidgetStatePropertyAll(palette.onAccent),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(foregroundColor: palette.onAccent),
+    ),
     scaffoldBackgroundColor: Colors.black,
-    cupertinoOverrideTheme: const NoDefaultCupertinoThemeData(
+    cupertinoOverrideTheme: NoDefaultCupertinoThemeData(
       primaryColor: Colors.white,
-      primaryContrastingColor: Color(0xFFFD2F2F),
-      barBackgroundColor: Color(0xFF471F27),
+      primaryContrastingColor: palette.accent,
+      barBackgroundColor: palette.panel,
       scaffoldBackgroundColor: Colors.black,
     ),
     snackBarTheme: const SnackBarThemeData(
@@ -58,21 +84,22 @@ abstract class Themes {
       thumbColor: Colors.white,
       thumbShape: RoundSliderThumbShape(enabledThumbRadius: 16),
     ),
-    bottomSheetTheme: const BottomSheetThemeData(
-      backgroundColor: Color(0xFF471F27),
-      shape: RoundedRectangleBorder(
+    bottomSheetTheme: BottomSheetThemeData(
+      backgroundColor: palette.panel,
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(38)),
       ),
     ),
-    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: Color(0xFF471F27),
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: palette.panel,
     ),
-    navigationRailTheme: const NavigationRailThemeData(
-      backgroundColor: Color(0xFF471F27),
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: palette.panel,
+      indicatorColor: palette.indicator,
     ),
     chipTheme: ChipThemeData(
       labelPadding: const EdgeInsets.symmetric(horizontal: 11),
-      backgroundColor: const Color(0xFF362A30),
+      backgroundColor: palette.chip,
       selectedColor: const Color(0xFF0066FF),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
@@ -90,7 +117,7 @@ abstract class Themes {
       ),
     ),
     tooltipTheme: TooltipThemeData(
-      decoration: tooltipDecoration,
+      decoration: _tooltipDecoration(palette.surface),
       textStyle: tooltipTextStyle,
       padding: tooltipPadding,
       waitDuration: tooltipDelay,

@@ -80,7 +80,7 @@ Future<void> showUpstreamAnnouncements(
     return showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Themes.changelogSurface,
+        backgroundColor: Themes.changelogSurfaceOf(context),
         shape: RoundedRectangleBorder(borderRadius: radius),
         clipBehavior: Clip.antiAlias,
         titlePadding: EdgeInsets.zero,
@@ -103,7 +103,7 @@ Future<void> showUpstreamAnnouncements(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    backgroundColor: Themes.changelogSurface,
+    backgroundColor: Themes.changelogSurfaceOf(context),
     shape: RoundedRectangleBorder(borderRadius: radius),
     builder: (context) => ConstrainedBox(
       constraints: BoxConstraints(

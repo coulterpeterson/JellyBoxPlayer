@@ -16,3 +16,4 @@ export 'start_page.dart';
 export 'stream_quality.dart';
 export 'crossfade.dart';
 export 'retro_theme.dart';
+export 'theme_color.dart';

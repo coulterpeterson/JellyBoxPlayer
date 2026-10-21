@@ -12,6 +12,7 @@ enum AppSetting {
   nowPlayingHalo('now_playing_halo'),
   albumArtTint('album_art_tint', defaultValue: true),
   artworkAccent('artwork_accent', defaultValue: true),
+  themeColor('theme_color', defaultValue: 'purple'),
   animatedCovers('animated_covers'),
   animationSpeed('animation_speed', defaultValue: 'medium'),
   generatedPlaylistsDisabled('disable_generated_playlists'),
@@ -131,6 +132,16 @@ final retroThemeProvider = Provider<RetroTheme>((ref) {
   }
   return theme;
 });
+
+/// The colour of the regular app interface (not the retro themes).
+final themeColorProvider = Provider<ThemeColor>(
+  (ref) =>
+      ThemeColor.values.asNameMap()[_asString(
+        ref.watch(appSettingsProvider)[AppSetting.themeColor],
+        AppSetting.themeColor,
+      )] ??
+      ThemeColor.purple,
+);
 
 final crossfadeProvider = Provider<Crossfade>(
   (ref) =>

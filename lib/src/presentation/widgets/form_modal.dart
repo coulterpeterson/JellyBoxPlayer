@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:jplayer/src/presentation/themes/app_palette.dart';
 import 'package:jplayer/src/presentation/utils/utils.dart';
 
 Future<T?> showFormModal<T>(
@@ -92,6 +93,9 @@ class ModalFormActions extends StatelessWidget {
     bool primary = false,
   }) => TextButton.styleFrom(
     backgroundColor: primary ? Theme.of(context).colorScheme.primary : null,
+    foregroundColor: primary
+        ? AppPalette.textOn(Theme.of(context).colorScheme.primary)
+        : null,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
   );
